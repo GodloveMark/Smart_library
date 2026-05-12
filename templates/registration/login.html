@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-5 col-lg-4">
+            <div class="card shadow-lg border-0 mt-5">
+                <div class="card-header bg-dark text-white text-center py-4">
+                    <h3 class="font-weight-bold mb-0">Welcome Back</h3>
+                    <p class="small text-light opacity-75 mb-0">Please sign in to continue</p>
+                </div>
+                
+                <div class="card-body p-4">
+                    <form method="post" id="login-form">
+                        {% csrf_token %}
+                        
+                        <div class="django-form-container">
+                            {{ form.as_p }}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-block py-2 mt-4 shadow-sm">
+                            <i class="fas fa-sign-in-alt mr-2"></i>Login
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="card-footer bg-light text-center py-3">
+                    <div class="small">
+                        Don't have an account? <a href="{% url 'signup' %}" class="font-weight-bold">Register</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-3">
+                <a href="/" class="text-muted small text-decoration-none">
+                    <i class="fas fa-arrow-left mr-1"></i> Back to Homepage
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Styling for the standard Django form output */
+    .django-form-container p {
+        margin-bottom: 1rem;
+    }
+    .django-form-container label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    /* This will be applied via JS below */
+    .form-control-custom {
+        display: block;
+        width: 100%;
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+        color: #495057;
+        background-color: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+</style>
+
+<script>
+    // Automagically add Bootstrap classes to Django's default form fields
+    document.addEventListener("DOMContentLoaded", function() {
+        const formInputs = document.querySelectorAll('#login-form input');
+        formInputs.forEach(input => {
+            if (input.type !== 'checkbox' && input.type !== 'radio') {
+                input.classList.add('form-control');
+            }
+        });
+    });
+</script>
+{% endblock %}

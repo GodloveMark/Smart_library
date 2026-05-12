@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{{ book.title }} <small class="text-muted">| {{ book.author }}</small></h2>
+        <div>
+            <button class="btn btn-outline-primary btn-sm me-2" onclick="getSummary()" id="summary-btn">
+                <i class="bi bi-stars"></i> Generate Summary
+            </button>
+            <a href="{% url 'list' %}" class="btn btn-outline-secondary btn-sm">Back to Library</a>
+        </div>
+        <div id="summary-box" class="mt-4 p-3 border rounded bg-light" style="display:none;">
+    <h5>📄 Book Summary</h5>
+    <div id="summary-content" style="white-space: pre-wrap;"></div>
+</div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center sticky-top" style="z-index: 1020;">
+                    <div>
+                        <button id="prev-page" class="btn btn-sm btn-dark">←</button>
+                        <span class="mx-2 font-monospace">Page <strong id="page-num">{{ start_page }}</strong> / <span id="page-count">-</span></span>
+                        <button id="next-page" class="btn btn-sm btn-dark">→</button>
+                    </div>
+                    <div>
+                        <div class="btn-group me-2">
+                            <button id="zoom-out" class="btn btn-sm btn-light border">-</button>
+                            <button id="zoom-in" class="btn btn-sm btn-light border">+</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body p-0 bg-light d-flex justify-content-center" style="height: 78vh; overflow: auto;" id="viewer-container">
+                    <div id="pdf-wrapper" style="position: relative; margin: 20px auto; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
+                        <canvas id="pdf-canvas" style="display: block;"></canvas>
+                        <div id="text-layer" class="textLayer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm" style="height: 85vh; display: flex; flex-direction: column;">
+                <div class="card-header bg-primary p-0">
+                    <ul class="nav nav-tabs nav-fill border-0" id="sidebarTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active text-white border-0 py-3" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes-panel" type="button" role="tab">Notes</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link text-white border-0 py-3" id="ai-tab" data-bs-toggle="tab" data-bs-target="#ai-panel" type="button" role="tab">AI Assistant</button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="card-body tab-content flex-grow-1 overflow-hidden" style="display: flex; flex-direction: column;">
+                    <div class="tab-pane fade show active flex-grow-1 d-flex flex-column overflow-hidden" id="notes-panel" role="tabpanel">
+                        <div id="notes-list" class="list-group list-group-flush mb-3 flex-grow-1 overflow-auto">
+                            {% for highlight in highlights %}
+                            <div class="list-group-item px-0 border-start border-warning border-4 ps-2">
+                                <small class="text-muted">Highlight - P. {{ highlight.page }}</small>
+                                <p class="small mb-1" style="font-style: italic;">"{{ highlight.text }}"</p>
+                            </div>
+                            {% endfor %}
+                            {% for note in notes %}
+                            <div class="list-group-item px-0">
+                                <span class="badge bg-info mb-1">Page {{ note.page }}</span>
+                                <p class="small mb-1">{{ note.note }}</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-auto pt-3 border-top bg-white">
+                            <textarea id="note-text" class="form-control mb-2" rows="3" placeholder="Write a note for page {{ start_page }}..."></textarea>
+                            <button id="add-note" class="btn btn-primary w-100">Save Note</button>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade flex-grow-1 d-flex flex-column overflow-hidden" id="ai-panel" role="tabpanel">
+                        <div id="chat-history" class="flex-grow-1 overflow-auto p-2 bg-light mb-2 rounded border" style="min-height: 300px;">
+                            <div class="text-muted text-center py-5" id="chat-placeholder">
+                                <i class="bi bi-robot fs-1 d-block mb-2"></i>
+                                <strong>AI is ready.</strong><br>Ask me a question about this book.
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" id="ai-query" class="form-control" placeholder="Type your question...">
+                            <button class="btn btn-primary" id="send-ai-btn">Ask</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.textLayer {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    overflow: hidden;
+    opacity: 0.2;
+    line-height: 1.0;
+    z-index: 2;
+    pointer-events: auto;
+}
+.textLayer span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+.nav-tabs .nav-link.active {
+    background-color: rgba(255,255,255,0.2) !important;
+    border: none;
+    font-weight: bold;
+}
+#chat-history { scroll-behavior: smooth; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// PDF Config
+const url = "{{ book.file.url }}";
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js";
+
+let pdfDoc = null,
+    pageNum = parseInt("{{ start_page }}") || 1,
+    pageIsRendering = false,
+    pageNumIsPending = null,
+    scale = 1.4;
+
+const canvas = document.getElementById('pdf-canvas');
+const ctx = canvas.getContext('2d');
+const textLayerDiv = document.getElementById('text-layer');
+const aiBtn = document.getElementById('send-ai-btn');
+const aiInput = document.getElementById('ai-query');
+const chatHistory = document.getElementById('chat-history');
+
+let isLoading = false;
+
+// ==============================
+// 🛠️ UTILS
+// ==============================
+function escapeHTML(str) {
+    return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[m]);
+}
+
+// ==============================
+// 📄 PDF RENDERING
+// ==============================
+function renderPage(num) {
+    pageIsRendering = true;
+    pdfDoc.getPage(num).then(page => {
+        const viewport = page.getViewport({ scale: scale });
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const wrapper = document.getElementById('pdf-wrapper');
+        wrapper.style.width = canvas.width + "px";
+        wrapper.style.height = canvas.height + "px";
+
+        const renderContext = { canvasContext: ctx, viewport: viewport };
+
+        page.render(renderContext).promise.then(() => {
+            pageIsRendering = false;
+            if (pageNumIsPending !== null) {
+                renderPage(pageNumIsPending);
+                pageNumIsPending = null;
+            }
+            return page.getTextContent();
+        }).then(textContent => {
+            textLayerDiv.innerHTML = "";
+            pdfjsLib.renderTextLayer({
+                textContentSource: textContent,
+                container: textLayerDiv,
+                viewport: viewport,
+                textDivs: []
+            });
+        });
+
+        document.getElementById('page-num').textContent = num;
+        // Update note placeholder context
+        document.getElementById('note-text').placeholder = `Write a note for page ${num}...`;
+    });
+}
+
+function queueRenderPage(num) {
+    if (pageIsRendering) { pageNumIsPending = num; } 
+    else { renderPage(num); }
+}
+
+// ==============================
+// 🤖 AI & CHAT
+// ==============================
+function addMessage(sender, message, isUser=false) {
+    const placeholder = document.getElementById('chat-placeholder');
+    if (placeholder) placeholder.remove();
+
+    const align = isUser ? "text-end" : "text-start";
+    const bg = isUser ? "bg-primary text-white" : "bg-white border";
+
+    chatHistory.innerHTML += `
+        <div class="mb-3 ${align}">
+            <small class="text-muted d-block mb-1">${sender}</small>
+            <span class="${bg} p-2 rounded d-inline-block shadow-sm" style="max-width: 85%;">
+                ${message}
+            </span>
+        </div>
+    `;
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function getSummary() {
+    const box = document.getElementById("summary-box");
+    const content = document.getElementById("summary-content");
+
+    // Show loading
+    box.style.display = "block";
+    content.innerHTML = "⏳ Generating summary...";
+
+    fetch("{% url 'summarize_book' book.id %}")
+    .then(res => {
+        if (!res.ok) throw new Error("Server error");
+        return res.json();
+    })
+    .then(data => {
+        content.innerText = data.summary;
+    })
+    .catch(err => {
+        content.innerHTML = "<span class='text-danger'>Failed to load summary</span>";
+    });
+}
+
+if (aiBtn) {
+    aiBtn.addEventListener('click', async () => {
+        if (isLoading) return;
+        const query = aiInput.value.trim();
+        if (!query) return;
+
+        isLoading = true;
+        aiBtn.disabled = true;
+        addMessage("You", escapeHTML(query), true);
+        aiInput.value = "";
+
+        const loadingId = "loading-" + Date.now();
+        chatHistory.innerHTML += `<div id="${loadingId}" class="text-muted small mb-3">AI is thinking...</div>`;
+
+        try {
+            const response = await fetch("{% url 'chat_with_book' book.id %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({ message: query, page: pageNum })
+            });
+            const data = await response.json();
+            document.getElementById(loadingId).remove();
+            addMessage("AI Assistant", escapeHTML(data.answer || "I couldn't find an answer."));
+        } catch (e) {
+            document.getElementById(loadingId).innerHTML = `<span class="text-danger">Error connecting to AI.</span>`;
+        } finally {
+            isLoading = false;
+            aiBtn.disabled = false;
+        }
+    });
+}
+
+// ==============================
+// 📝 NOTES
+// ==============================
+document.getElementById('add-note')?.addEventListener('click', async () => {
+    const btn = document.getElementById('add-note');
+    const noteArea = document.getElementById('note-text');
+    const noteText = noteArea.value.trim();
+    
+    if (!noteText) return;
+
+    btn.disabled = true;
+    try {
+        const response = await fetch("{% url 'add_note' book.id %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({ note: noteText, page: pageNum })
+        });
+
+        if (response.ok) {
+            const notesList = document.getElementById('notes-list');
+            const newNote = `
+                <div class="list-group-item px-0">
+                    <span class="badge bg-info mb-1">Page ${pageNum}</span>
+                    <p class="small mb-1">${escapeHTML(noteText)}</p>
+                </div>`;
+            notesList.insertAdjacentHTML('afterbegin', newNote);
+            noteArea.value = "";
+        }
+    } catch (e) {
+        alert("Error saving note.");
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// ==============================
+// 📄 CONTROLS
+// ==============================
+document.getElementById('prev-page')?.addEventListener('click', () => {
+    if (pageNum > 1) { pageNum--; queueRenderPage(pageNum); }
+});
+
+document.getElementById('next-page')?.addEventListener('click', () => {
+    if (pdfDoc && pageNum < pdfDoc.numPages) { pageNum++; queueRenderPage(pageNum); }
+});
+
+document.getElementById('zoom-in')?.addEventListener('click', () => {
+    scale += 0.2; queueRenderPage(pageNum);
+});
+
+document.getElementById('zoom-out')?.addEventListener('click', () => {
+    if (scale > 0.6) { scale -= 0.2; queueRenderPage(pageNum); }
+});
+
+aiInput.addEventListener("keypress", (e) => { if (e.key === "Enter") aiBtn.click(); });
+
+// ==============================
+// 🚀 INIT
+// ==============================
+pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
+    pdfDoc = pdfDoc_;
+    document.getElementById('page-count').textContent = pdfDoc.numPages;
+    renderPage(pageNum);
+}).catch(err => {
+    console.error("PDF Load Error: ", err);
+    document.getElementById('viewer-container').innerHTML = `<div class="alert alert-danger m-5">Failed to load PDF file.</div>`;
+});
+</script>
+{% endblock %}

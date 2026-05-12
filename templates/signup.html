@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Account{% endblock title %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-7 col-lg-6">
+            <div class="card shadow-lg border-0 mt-4 mb-5">
+                <div class="card-header bg-success text-white text-center py-4">
+                    <h3 class="font-weight-bold mb-0"><i class="fas fa-user-plus mr-2"></i>Join Us</h3>
+                    <p class="small text-white-50 mb-0">Create your account to start reading and learning</p>
+                </div>
+                
+                <div class="card-body p-4 p-md-5">
+                    <form method="post" id="signup-form">
+                        {% csrf_token %}
+                        
+                        <div class="django-form-container">
+                            {{ form.as_p }}
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-success btn-block btn-lg shadow-sm">
+                                <i class="fas fa-check-circle mr-2"></i>Create My Account
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="card-footer bg-light text-center py-3">
+                    <div class="small text-muted">
+                        Already have an account? <a href="{% url 'login' %}" class="text-success font-weight-bold">Login here</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info border-0 shadow-sm small text-center">
+                <i class="fas fa-info-circle mr-1"></i> 
+                Passwords must meet the system security requirements.
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Styling for the standard Django form output */
+    .django-form-container p {
+        margin-bottom: 1.25rem;
+    }
+    
+    .django-form-container label {
+        display: block;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: #2c3e50;
+        margin-bottom: 0.4rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Helper text (Django password requirements usually) */
+    .django-form-container .helptext {
+        display: block;
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+        line-height: 1.4;
+    }
+
+    /* Error handling */
+    .django-form-container .errorlist {
+        color: #e74c3c;
+        list-style: none;
+        padding: 0;
+        font-size: 0.8rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Form control focus effect */
+    .form-control:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+</style>
+
+<script>
+    // Injects Bootstrap classes into the auto-generated Django HTML
+    document.addEventListener("DOMContentLoaded", function() {
+        const formInputs = document.querySelectorAll('#signup-form input, #signup-form select, #signup-form textarea');
+        formInputs.forEach(input => {
+            if (input.type !== 'checkbox' && input.type !== 'radio') {
+                input.classList.add('form-control');
+            }
+        });
+    });
+</script>
+{% endblock content %}

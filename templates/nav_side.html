@@ -1,0 +1,31 @@
+<div class="bg-light border-right" id="sidebar-wrapper">
+    <div class="sidebar-heading text-primary font-weight-bold p-3">Menu</div>
+    <div class="list-group list-group-flush">
+        <a href="/" class="list-group-item list-group-item-action bg-light">🏠 Home</a>
+
+        {% if user.user_type == "student" %}
+            <a href="#" class="list-group-item list-group-item-action bg-light">📚 My Books</a>
+           
+        {% endif %}
+
+        {% if user.user_type == "tutor" %}
+            <a href="#" class="list-group-item list-group-item-action bg-light">📤 Upload Book</a>
+            <a href="#" class="list-group-item list-group-item-action bg-light">📖 My Books</a>
+            <a href="{% url 'tutor_earnings' %}" class="list-group-item list-group-item-action bg-light">💵 My Earnings</a>
+        {% endif %}
+
+        {% if user.user_type == "manager" %}
+            <a href="{% url 'manager_dashboard' %}" class="list-group-item list-group-item-action bg-light">📊 Dashboard</a>
+            <a href="{% url 'tutor_list' %}" class="list-group-item list-group-item-action bg-light">👨‍🏫 Tutors</a>
+            <a href="{% url 'create_tutor' %}" class="list-group-item list-group-item-action bg-light">➕ Create Tutor</a>
+            <a href="{% url 'pending_tutors' %}" class="list-group-item list-group-item-action bg-light">⏳ Pending Approvals</a>
+        {% endif %}
+
+        {% if user.user_type == "admin" %}
+            <a href="{% url 'admin_dashboard' %}" class="list-group-item list-group-item-action bg-light font-weight-bold">🛡️ Admin Dashboard</a>
+            <a href="{% url 'all_users' %}" class="list-group-item list-group-item-action bg-light">👥 All Users</a>
+            <a href="{% url 'create_manager' %}" class="list-group-item list-group-item-action bg-light">👔 Create Manager</a>
+            <a href="{% url 'admin_books' %}" class="list-group-item list-group-item-action bg-light">📚 All Books</a>
+        {% endif %}
+    </div>
+</div>

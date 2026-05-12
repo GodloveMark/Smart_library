@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row align-items-center mb-3">
+    <div class="col-md-7">
+        <h4 class="mb-0">{{ book.title }}</h4>
+        <span class="text-muted small">by {{ book.author }}</span>
+    </div>
+    <div class="col-md-5 text-right">
+        <button class="btn btn-outline-primary btn-sm mr-2" onclick="getSummary()"><i class="fas fa-magic mr-1"></i> AI Summary</button>
+        <a href="{% url 'list' %}" class="btn btn-outline-secondary btn-sm">Library</a>
+    </div>
+</div>
+
+<div id="summary-box" class="alert alert-info border-primary mb-4 shadow-sm" style="display:none;">
+    <h6 class="font-weight-bold">📄 AI Summary</h6>
+    <div id="summary-content" class="small" style="white-space: pre-wrap;"></div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow overflow-hidden">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                <div>
+                    <button id="prev-page" class="btn btn-sm btn-light py-0">←</button>
+                    <span class="mx-2 small font-weight-bold">Page <span id="page-num">{{ start_page }}</span> / <span id="page-count">-</span></span>
+                    <button id="next-page" class="btn btn-sm btn-light py-0">→</button>
+                </div>
+                <div class="btn-group">
+                    <button id="zoom-out" class="btn btn-sm btn-secondary py-0">-</button>
+                    <button id="zoom-in" class="btn btn-sm btn-secondary py-0">+</button>
+                </div>
+            </div>
+            <div class="card-body p-0 bg-secondary d-flex justify-content-center overflow-auto" style="height: 75vh;" id="viewer-container">
+                <div id="pdf-wrapper" style="position: relative; margin: 20px auto; box-shadow: 0 0 15px rgba(0,0,0,0.3);">
+                    <canvas id="pdf-canvas"></canvas>
+                    <div id="text-layer" class="textLayer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 mt-4 mt-lg-0">
+        <div class="card shadow d-flex flex-column" style="height: 75vh;">
+            <div class="card-header p-0">
+                <ul class="nav nav-tabs nav-fill bg-light" id="sidebarTab" role="tablist">
+                    <li class="nav-item"><a class="nav-link active py-3 border-0 font-weight-bold" data-toggle="tab" href="#notes-panel">Notes</a></li>
+                    <li class="nav-item"><a class="nav-link py-3 border-0 font-weight-bold" data-toggle="tab" href="#ai-panel">AI Chat</a></li>
+                </ul>
+            </div>
+            <div class="card-body tab-content overflow-hidden p-3 d-flex flex-column">
+                <div class="tab-pane fade show active h-100 d-flex flex-column" id="notes-panel">
+                    <div id="notes-list" class="flex-grow-1 overflow-auto small mb-3">
+                        {% for note in notes %}<div class="bg-light p-2 mb-2 border-left border-primary rounded shadow-sm">Page {{ note.page }}: {{ note.note }}</div>{% endfor %}
+                    </div>
+                    <textarea id="note-text" class="form-control form-control-sm mb-2" rows="2" placeholder="Write a note..."></textarea>
+                    <button id="add-note" class="btn btn-primary btn-sm btn-block">Save Note</button>
+                </div>
+                <div class="tab-pane fade h-100 d-flex flex-column" id="ai-panel">
+                    <div id="chat-history" class="flex-grow-1 overflow-auto p-2 bg-light mb-2 rounded small border">
+                        <div class="text-muted text-center py-4">Ask a question about the book!</div>
+                    </div>
+                    <div class="input-group input-group-sm">
+                        <input type="text" id="ai-query" class="form-control" placeholder="Type here...">
+                        <div class="input-group-append"><button id="send-ai-btn" class="btn btn-primary">Ask</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .textLayer { position: absolute; left:0; top:0; right:0; bottom:0; overflow:hidden; opacity:0.2; line-height:1; z-index:2; pointer-events:auto; }
+    .textLayer span { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+    .nav-tabs .nav-link.active { background-color: white !important; color: #007bff; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
+<script>
+    const url = "{{ book.file.url }}";
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js";
+
+    let pdfDoc = null, pageNum = parseInt("{{ start_page }}") || 1, pageIsRendering = false, pageNumIsPending = null, scale = 1.3;
+    const canvas = document.getElementById('pdf-canvas'), ctx = canvas.getContext('2d'), textLayerDiv = document.getElementById('text-layer');
+
+    function renderPage(num) {
+        pageIsRendering = true;
+        pdfDoc.getPage(num).then(page => {
+            const viewport = page.getViewport({ scale });
+            canvas.height = viewport.height; canvas.width = viewport.width;
+            const wrapper = document.getElementById('pdf-wrapper');
+            wrapper.style.width = canvas.width + "px"; wrapper.style.height = canvas.height + "px";
+            
+            page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+                pageIsRendering = false;
+                if (pageNumIsPending !== null) { renderPage(pageNumIsPending); pageNumIsPending = null; }
+                return page.getTextContent();
+            }).then(textContent => {
+                textLayerDiv.innerHTML = "";
+                pdfjsLib.renderTextLayer({ textContentSource: textContent, container: textLayerDiv, viewport, textDivs: [] });
+            });
+            document.getElementById('page-num').textContent = num;
+        });
+    }
+
+    function queueRenderPage(num) { if (pageIsRendering) pageNumIsPending = num; else renderPage(num); }
+
+    pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
+        pdfDoc = pdfDoc_;
+        document.getElementById('page-count').textContent = pdfDoc.numPages;
+        renderPage(pageNum);
+    });
+
+    document.getElementById('prev-page').addEventListener('click', () => { if (pageNum > 1) { pageNum--; queueRenderPage(pageNum); } });
+    document.getElementById('next-page').addEventListener('click', () => { if (pdfDoc && pageNum < pdfDoc.numPages) { pageNum++; queueRenderPage(pageNum); } });
+    document.getElementById('zoom-in').addEventListener('click', () => { scale += 0.2; queueRenderPage(pageNum); });
+    document.getElementById('zoom-out').addEventListener('click', () => { if (scale > 0.6) { scale -= 0.2; queueRenderPage(pageNum); } });
+
+    // AI & Note JS functions (re-use from previous snippet)
+    function getSummary() {
+        const box = document.getElementById("summary-box");
+        const content = document.getElementById("summary-content");
+        box.style.display = "block"; content.innerText = "⏳ Generating summary...";
+        fetch("{% url 'summarize_book' book.id %}").then(res => res.json()).then(data => content.innerText = data.summary).catch(() => content.innerText = "Error loading summary.");
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="font-weight-bold">👨‍🏫 Tutor Management</h3>
+    <a href="{% url 'create_tutor' %}" class="btn btn-primary shadow-sm">
+        <i class="fas fa-plus mr-2"></i>Add New Tutor
+    </a>
+</div>
+
+<div class="card shadow border-0">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="thead-light">
+                <tr>
+                    <th>Username</th>
+                    <th>Email Address</th>
+                    <th>Account Status</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tutor in tutors %}
+                <tr>
+                    <td class="align-middle font-weight-bold">{{ tutor.username }}</td>
+                    <td class="align-middle">{{ tutor.email }}</td>
+                    <td class="align-middle">
+                        {% if tutor.is_active %}
+                            <span class="badge badge-pill badge-success">Active</span>
+                        {% else %}
+                            <span class="badge badge-pill badge-secondary">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td class="align-middle text-right">
+                        <div class="btn-group shadow-sm">
+                            <a href="{% url 'tutor_books' tutor.id %}" class="btn btn-sm btn-outline-info">
+                                <i class="fas fa-book mr-1"></i>Books
+                            </a>
+                            <a href="{% url 'toggle_user' tutor.id %}" class="btn btn-sm {% if tutor.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+                                <i class="fas fa-power-off mr-1"></i>Toggle
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center py-5 text-muted">No tutors found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

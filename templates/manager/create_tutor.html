@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow border-0 mt-4">
+            <div class="card-header bg-dark text-white text-center py-4">
+                <h4 class="font-weight-light mb-0">👨‍🏫 Create Tutor Profile</h4>
+                <p class="small mb-0 opacity-75">Registers a new instructor account</p>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    {% csrf_token %}
+
+                    <div class="form-group">
+                        <label class="small font-weight-bold">Username</label>
+                        <div class="input-group mb-3">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            </div>
+                            <input type="text" name="username" class="form-control" placeholder="Enter username" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="small font-weight-bold">Email Address</label>
+                        <div class="input-group mb-3">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                            </div>
+                            <input type="email" name="email" class="form-control" placeholder="tutor@example.com" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="small font-weight-bold">Password</label>
+                        <div class="input-group mb-4">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                            </div>
+                            <input type="password" name="password" class="form-control" placeholder="Assign password" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-dark btn-block shadow-sm py-2">
+                        <i class="fas fa-user-plus mr-2"></i>Create Tutor
+                    </button>
+                </form>
+            </div>
+            <div class="card-footer text-center bg-light">
+                <a href="{% url 'tutor_list' %}" class="text-muted small">
+                    <i class="fas fa-arrow-left mr-1"></i>Back to Tutor List
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

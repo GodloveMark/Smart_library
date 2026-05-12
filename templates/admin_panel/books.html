@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="font-weight-bold">📚 All Books Catalog</h2>
+        <span class="badge badge-secondary p-2">{{ books|length }} Total Books</span>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">Inventory Management</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Uploaded By (Tutor)</th>
+                            <th>Price</th>
+                            <th class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in books %}
+                        <tr>
+                            <td class="align-middle font-weight-bold">{{ book.title }}</td>
+                            <td class="align-middle text-muted">{{ book.author }}</td>
+                            <td class="align-middle">
+                                <i class="fas fa-user-tie mr-1 small"></i>{{ book.tutor.username }}
+                            </td>
+                            <td class="align-middle text-success font-weight-bold">
+                                ${{ book.price }}
+                            </td>
+                            <td class="align-middle text-center">
+                                {% if book.book_available %}
+                                    <span class="badge badge-pill badge-success">
+                                        <i class="fas fa-check-circle mr-1"></i> Available
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-pill badge-danger">
+                                        <i class="fas fa-times-circle mr-1"></i> Not Available
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="fas fa-book-open fa-3x mb-3"></i>
+                                    <p>No books found in the database.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
