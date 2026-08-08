@@ -9,8 +9,8 @@
         {% endif %}
 
         {% if user.user_type == "tutor" %}
-            <a href="#" class="list-group-item list-group-item-action bg-light">📤 Upload Book</a>
-            <a href="#" class="list-group-item list-group-item-action bg-light">📖 My Books</a>
+            <a href="{% url 'upload_book' %}" class="list-group-item list-group-item-action bg-light">📤 Upload Book</a>
+            <a href="{% url 'tutor_books' %}"  class="list-group-item list-group-item-action bg-light">📖 My Books</a>
             <a href="{% url 'tutor_earnings' %}" class="list-group-item list-group-item-action bg-light">💵 My Earnings</a>
         {% endif %}
 

@@ -339,9 +339,32 @@ def manager_tutors(request):
         context
     )
 
+@login_required
+def tutor_books(request):
+
+    if request.user.user_type != 'tutor':
+        return redirect('home')
+
+    books = (
+        Book.objects
+        .filter(tutor=request.user)
+        .order_by('-created_at')
+    )
+
+    context = {
+        'books': books,
+    }
+
+    return render(
+        request,
+        'tutor/books.html',
+        context
+    )
+
+
 
 @login_required
-def tutor_books(request, tutor_id):
+def manager_tutor_books(request, tutor_id):
 
     if request.user.user_type != 'manager':
         return redirect('home')
@@ -358,19 +381,16 @@ def tutor_books(request, tutor_id):
         .order_by('-created_at')
     )
 
-
     context = {
         'tutor': tutor,
         'books': books,
     }
-
 
     return render(
         request,
         'manager/tutor_books.html',
         context
     )
-
 
 @login_required
 def manager_books(request):
@@ -409,18 +429,75 @@ def manager_books(request):
         context
     )
 
+
+
 @login_required
-def tutor_books(request, user_id):
-    if request.user.user_type != 'manager':
+def tutor_earnings(request):
+    if request.user.user_type != 'tutor':
         return redirect('home')
 
-    tutor = User.objects.get(id=user_id)
-    books = Book.objects.filter(tutor=tutor)
+    # Temporary implementation.
+    # Replace this with actual Order/payment calculations
+    # once your payment model is connected.
+    context = {
+        'total_earnings': 0,
+    }
 
-    return render(request, "manager/tutor_books.html", {
-        "tutor": tutor,
-        "books": books
-    })
+    return render(
+        request,
+        'tutor/earnings.html',
+        context
+    )
+
+
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import render, redirect
+
+from books.forms import BookUploadForm
+
+
+@login_required
+def tutor_upload_book(request):
+
+    if request.user.user_type != 'tutor':
+        raise PermissionDenied(
+            "Only tutors can upload books."
+        )
+
+    if request.method == 'POST':
+
+        form = BookUploadForm(
+            request.POST,
+            request.FILES
+        )
+
+        if form.is_valid():
+
+            book = form.save(commit=False)
+
+            # Automatically assign the logged-in tutor
+            book.tutor = request.user
+
+            book.save()
+
+            return redirect('tutor_books')
+
+    else:
+
+        form = BookUploadForm()
+
+
+    context = {
+        'form': form,
+    }
+
+    return render(
+        request,
+        'tutor/upload_book.html',
+        context
+    )
+
 
 
 

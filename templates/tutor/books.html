@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+
+            <h2 class="fw-bold mb-1">
+                📚 My Books
+            </h2>
+
+            <p class="text-muted mb-0">
+                Books you have uploaded to the library.
+            </p>
+
+        </div>
+
+
+        <div>
+
+            <a
+                href="{% url 'tutor_dashboard' %}"
+                class="btn btn-outline-secondary"
+            >
+                Dashboard
+            </a>
+
+            <a
+                href="{% url 'upload_book' %}"
+                class="btn btn-primary"
+            >
+                + Upload Book
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <div class="card border-0 shadow-sm">
+
+        <div class="card-header bg-white py-3">
+
+            <div class="d-flex justify-content-between">
+
+                <h5 class="fw-bold mb-0">
+                    My Library
+                </h5>
+
+                <span class="badge bg-primary">
+                    {{ books|length }} books
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+
+                <table class="table table-hover align-middle mb-0">
+
+                    <thead class="table-light">
+
+                        <tr>
+
+                            <th>#</th>
+
+                            <th>Book</th>
+
+                            <th>Author</th>
+
+                            <th>Price</th>
+
+                            <th>Uploaded</th>
+
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+                        {% for book in books %}
+
+                        <tr>
+
+                            <td>
+                                {{ forloop.counter }}
+                            </td>
+
+
+                            <td>
+
+                                <strong>
+                                    {{ book.title }}
+                                </strong>
+
+                            </td>
+
+
+                            <td>
+
+                                {{ book.author|default:"—" }}
+
+                            </td>
+
+
+                            <td>
+
+                                {% if book.price %}
+
+                                    {{ book.price }}
+
+                                {% else %}
+
+                                    <span class="text-muted">
+                                        Free
+                                    </span>
+
+                                {% endif %}
+
+                            </td>
+
+
+                            <td>
+
+                                <small class="text-muted">
+                                    {{ book.created_at|date:"d M Y" }}
+                                </small>
+
+                            </td>
+
+
+                            <td>
+
+                                <a
+                                    href="{% url 'read_book' book.id %}"
+                                    class="btn btn-sm btn-outline-primary"
+                                >
+                                    📖 Read
+                                </a>
+
+                            </td>
+
+                        </tr>
+
+
+                        {% empty %}
+
+                        <tr>
+
+                            <td
+                                colspan="6"
+                                class="text-center py-5"
+                            >
+
+                                <div class="fs-1">
+                                    📚
+                                </div>
+
+                                <h5 class="fw-bold mt-2">
+                                    No books yet
+                                </h5>
+
+                                <p class="text-muted">
+                                    Upload your first book to get started.
+                                </p>
+
+                                <a
+                                    href="{% url 'tutor_upload_book' %}"
+                                    class="btn btn-primary"
+                                >
+                                    Upload Book
+                                </a>
+
+                            </td>
+
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

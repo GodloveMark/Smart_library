@@ -23,6 +23,32 @@ path('admin-panel/users/toggle/<int:user_id>/', admin_toggle_user, name='admin_t
 path('admin-panel/create-manager/', create_manager, name='create_manager'),
 path('admin-panel/books/', admin_books, name='admin_books'),
 
+ # Tutor
+    path(
+        'tutor/upload/',
+        views.tutor_upload_book,
+        name='upload_book'
+    ),
+
+    path(
+        'tutor/books/',
+        views.tutor_books,
+        name='tutor_books'
+    ),
+
+    path(
+        'tutor/earnings/',
+        views.tutor_earnings,
+        name='tutor_earnings'
+    ),
+
+    # Manager
+    path(
+        'manager/tutors/<int:tutor_id>/books/',
+        views.manager_tutor_books,
+        name='manager_tutor_books'
+    ),
+
   path(
         'manager/students/',
         views.manager_students,
