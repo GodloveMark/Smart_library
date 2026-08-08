@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Tutor Books</h2>
+
+            {% if tutor %}
+                <p class="text-muted mb-0">
+                    Books uploaded by {{ tutor.get_full_name|default:tutor.username }}
+                </p>
+            {% endif %}
+        </div>
+
+        <a href="{% url 'tutor_dashboard' %}" class="btn btn-secondary">
+            Back
+        </a>
+    </div>
+
+
+    {% if books %}
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Title</th>
+                        <th>Author</th>
+                        <th>Uploaded</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for book in books %}
+
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+
+                        <td>
+                            <strong>{{ book.title }}</strong>
+                        </td>
+
+                        <td>
+                            {{ book.author }}
+                        </td>
+
+                        <td>
+                            {{ book.created_at|date:"d M Y" }}
+                        </td>
+
+                        <td>
+
+                            <a
+                                href="{% url 'read_book' book.pk %}"
+                                class="btn btn-primary btn-sm"
+                            >
+                                Read
+                            </a>
+
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+        </div>
+
+    {% else %}
+
+        <div class="alert alert-info">
+            This tutor has not uploaded any books yet.
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

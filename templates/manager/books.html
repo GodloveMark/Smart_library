@@ -1,0 +1,270 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="container-fluid py-4">
+
+```
+<!-- Header -->
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+
+    <div>
+
+        <h2 class="fw-bold mb-1">
+            📚 Library Books
+        </h2>
+
+        <p class="text-muted mb-0">
+            Monitor all books available in the library.
+        </p>
+
+    </div>
+
+
+    <a
+        href="{% url 'manager_dashboard' %}"
+        class="btn btn-outline-secondary"
+    >
+        ← Dashboard
+    </a>
+
+</div>
+
+
+<!-- Search -->
+
+<div class="card border-0 shadow-sm mb-4">
+
+    <div class="card-body">
+
+        <form method="get">
+
+            <div class="row g-2">
+
+                <div class="col-md-10">
+
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ query }}"
+                        class="form-control"
+                        placeholder="Search by title, author or tutor..."
+                    >
+
+                </div>
+
+
+                <div class="col-md-2">
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary w-100"
+                    >
+                        🔍 Search
+                    </button>
+
+                </div>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- Books Table -->
+
+<div class="card border-0 shadow-sm">
+
+    <div class="card-header bg-white border-0 py-3">
+
+        <div class="d-flex justify-content-between align-items-center">
+
+            <h5 class="fw-bold mb-0">
+                Library Collection
+            </h5>
+
+            <span class="badge bg-primary">
+                {{ books|length }} books
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <div class="card-body p-0">
+
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead class="table-light">
+
+                    <tr>
+
+                        <th>#</th>
+
+                        <th>Book</th>
+
+                        <th>Author</th>
+
+                        <th>Tutor</th>
+
+                        <th>Price</th>
+
+                        <th>Added</th>
+
+                        <th>View</th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                    {% for book in books %}
+
+                    <tr>
+
+                        <td>
+                            {{ forloop.counter }}
+                        </td>
+
+
+                        <td>
+
+                            <strong>
+                                {{ book.title }}
+                            </strong>
+
+                        </td>
+
+
+                        <td>
+
+                            {% if book.author %}
+
+                                {{ book.author }}
+
+                            {% else %}
+
+                                <span class="text-muted">
+                                    —
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+
+                        <td>
+
+                            {% if book.tutor %}
+
+                                <strong>
+                                    {{ book.tutor.get_full_name|default:book.tutor.username }}
+                                </strong>
+
+                                <br>
+
+                                <small class="text-muted">
+                                    @{{ book.tutor.username }}
+                                </small>
+
+                            {% else %}
+
+                                <span class="text-muted">
+                                    No tutor
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+
+                        <td>
+
+                            {% if book.price %}
+
+                                {{ book.price }}
+
+                            {% else %}
+
+                                <span class="text-muted">
+                                    Free
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+
+                        <td>
+
+                            <small class="text-muted">
+                                {{ book.created_at|date:"d M Y" }}
+                            </small>
+
+                        </td>
+
+
+                        <td>
+
+                            <a
+                                href="{% url 'read_book' book.id %}"
+                                class="btn btn-sm btn-outline-primary"
+                            >
+                                📖 Read
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+
+                    {% empty %}
+
+                    <tr>
+
+                        <td
+                            colspan="7"
+                            class="text-center py-5"
+                        >
+
+                            <div class="fs-1 mb-2">
+                                📚
+                            </div>
+
+                            <h6 class="fw-bold">
+                                No books found
+                            </h6>
+
+                            <p class="text-muted mb-0">
+                                There are currently no books matching your search.
+                            </p>
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+```
+
+</div>
+
+{% endblock %}

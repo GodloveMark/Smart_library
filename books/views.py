@@ -266,3 +266,99 @@ def summarize_book_view(request, pk):
     summary = summarize_book(book.id, book.file.path)
 
     return JsonResponse({"summary": summary})
+
+
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
+
+from books.models import Book
+
+User = get_user_model()
+
+
+def manager_required(view_func):
+    """
+    Allow only logged-in managers.
+    """
+
+    @login_required
+    def wrapper(request, *args, **kwargs):
+
+        if request.user.user_type != "manager":
+            raise PermissionDenied(
+                "Only managers can access this page."
+            )
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+@manager_required
+def tutor_books(request, tutor_id):
+    """
+    View all books belonging to one tutor.
+
+    Read-only.
+    """
+
+    tutor = get_object_or_404(
+        User,
+        id=tutor_id,
+        user_type="tutor"
+    )
+
+    books = (
+        Book.objects
+        .filter(tutor=tutor)
+        .order_by("-created_at")
+    )
+
+    context = {
+        "tutor": tutor,
+        "books": books,
+    }
+
+    return render(
+        request,
+        "manager/tutor_books.html",
+        context
+    )
+
+
+@manager_required
+def manager_books(request):
+    """
+    View all books in the library.
+
+    Read-only.
+    """
+
+    query = request.GET.get("q", "").strip()
+
+    books = Book.objects.select_related("tutor")
+
+    if query:
+        books = books.filter(
+            Q(title__icontains=query) |
+            Q(author__icontains=query) |
+            Q(tutor__username__icontains=query) |
+            Q(tutor__first_name__icontains=query) |
+            Q(tutor__last_name__icontains=query)
+        )
+
+    books = books.order_by("-created_at")
+
+    context = {
+        "books": books,
+        "query": query,
+    }
+
+    return render(
+        request,
+        "manager/books.html",
+        context
+    )

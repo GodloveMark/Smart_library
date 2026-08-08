@@ -148,36 +148,266 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from .models import Notification
 
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
+from django.db.models import Sum, Count, Q
+from django.shortcuts import render, redirect, get_object_or_404
+
+from books.models import Book
+
 
 User = get_user_model()
 
 
 @login_required
 def manager_dashboard(request):
+
     if request.user.user_type != 'manager':
         return redirect('home')
 
-    total_tutors = User.objects.filter(user_type='tutor').count()
-    total_students = User.objects.filter(user_type='student').count()
+    # =========================
+    # SUMMARY STATISTICS
+    # =========================
+
+    total_users = User.objects.count()
+
+    total_tutors = User.objects.filter(
+        user_type='tutor'
+    ).count()
+
+    total_students = User.objects.filter(
+        user_type='student'
+    ).count()
+
     total_books = Book.objects.count()
 
-    # simple revenue (sum of book prices)
-    total_revenue = Book.objects.aggregate(Sum('price'))['price__sum'] or 0
+    # This is the total value of books,
+    # NOT necessarily actual sales revenue.
+    total_book_value = (
+        Book.objects.aggregate(
+            total=Sum('price')
+        )['total'] or 0
+    )
 
-    latest_books = Book.objects.order_by('-created_at')[:5]
-    latest_tutors = User.objects.filter(user_type='tutor').order_by('-date_joined')[:5]
+
+    # =========================
+    # TUTOR STATISTICS
+    # =========================
+
+    tutor_statistics = (
+        User.objects
+        .filter(user_type='tutor')
+        .annotate(
+            book_count=Count('book')
+        )
+        .order_by('-book_count', 'username')[:10]
+    )
+
+
+    # =========================
+    # LATEST BOOKS
+    # =========================
+
+    latest_books = (
+        Book.objects
+        .select_related('tutor')
+        .order_by('-created_at')[:5]
+    )
+
+
+    # =========================
+    # LATEST TUTORS
+    # =========================
+
+    latest_tutors = (
+        User.objects
+        .filter(user_type='tutor')
+        .order_by('-date_joined')[:5]
+    )
+
+
+    # =========================
+    # LATEST STUDENTS
+    # =========================
+
+    latest_students = (
+        User.objects
+        .filter(user_type='student')
+        .order_by('-date_joined')[:5]
+    )
+
 
     context = {
-        "total_tutors": total_tutors,
-        "total_students": total_students,
-        "total_books": total_books,
-        "total_revenue": total_revenue,
-        "latest_books": latest_books,
-        "latest_tutors": latest_tutors,
+
+        # Summary cards
+        'total_users': total_users,
+        'total_tutors': total_tutors,
+        'total_students': total_students,
+        'total_books': total_books,
+        'total_book_value': total_book_value,
+
+        # Tables
+        'latest_books': latest_books,
+        'latest_tutors': latest_tutors,
+        'latest_students': latest_students,
+        'tutor_statistics': tutor_statistics,
     }
 
-    return render(request, "manager/dashboard.html", context)
 
+    return render(
+        request,
+        'manager/dashboard.html',
+        context
+    )
+
+
+@login_required
+def manager_students(request):
+
+    if request.user.user_type != 'manager':
+        return redirect('home')
+
+    query = request.GET.get('q', '').strip()
+
+    students = User.objects.filter(
+        user_type='student'
+    )
+
+    if query:
+        students = students.filter(
+            Q(username__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(email__icontains=query)
+        )
+
+    students = students.order_by('-date_joined')
+
+
+    context = {
+        'students': students,
+        'query': query,
+    }
+
+
+    return render(
+        request,
+        'manager/students.html',
+        context
+    )
+
+
+@login_required
+def manager_tutors(request):
+
+    if request.user.user_type != 'manager':
+        return redirect('home')
+
+    query = request.GET.get('q', '').strip()
+
+    tutors = (
+        User.objects
+        .filter(user_type='tutor')
+        .annotate(
+            book_count=Count('book')
+        )
+    )
+
+    if query:
+        tutors = tutors.filter(
+            Q(username__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(email__icontains=query)
+        )
+
+    tutors = tutors.order_by(
+        '-book_count',
+        'username'
+    )
+
+
+    context = {
+        'tutors': tutors,
+        'query': query,
+    }
+
+
+    return render(
+        request,
+        'manager/tutors.html',
+        context
+    )
+
+
+@login_required
+def tutor_books(request, tutor_id):
+
+    if request.user.user_type != 'manager':
+        return redirect('home')
+
+    tutor = get_object_or_404(
+        User,
+        id=tutor_id,
+        user_type='tutor'
+    )
+
+    books = (
+        Book.objects
+        .filter(tutor=tutor)
+        .order_by('-created_at')
+    )
+
+
+    context = {
+        'tutor': tutor,
+        'books': books,
+    }
+
+
+    return render(
+        request,
+        'manager/tutor_books.html',
+        context
+    )
+
+
+@login_required
+def manager_books(request):
+
+    if request.user.user_type != 'manager':
+        return redirect('home')
+
+    query = request.GET.get('q', '').strip()
+
+    books = Book.objects.select_related('tutor')
+
+
+    if query:
+
+        books = books.filter(
+            Q(title__icontains=query) |
+            Q(author__icontains=query) |
+            Q(tutor__username__icontains=query) |
+            Q(tutor__first_name__icontains=query) |
+            Q(tutor__last_name__icontains=query)
+        )
+
+
+    books = books.order_by('-created_at')
+
+
+    context = {
+        'books': books,
+        'query': query,
+    }
+
+
+    return render(
+        request,
+        'manager/books.html',
+        context
+    )
 
 @login_required
 def tutor_books(request, user_id):

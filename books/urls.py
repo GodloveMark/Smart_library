@@ -18,4 +18,7 @@ urlpatterns = [
     path('save-progress/<int:pk>/', save_progress, name='save_progress'),
     path('<int:pk>/chat/', chat_with_book, name='chat_with_book'),
     path('summarize/<int:pk>/', summarize_book_view, name='summarize_book'),
+
+
+    
 ]
