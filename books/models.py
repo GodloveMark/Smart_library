@@ -37,34 +37,125 @@ class Order(models.Model):
 
 
 # models.py
+
 class ReadingProgress(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
-    last_page = models.IntegerField(default=1)
+    last_page = models.PositiveIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'book'],
+                name='unique_user_book_progress'
+            )
+        ]
 
     def __str__(self):
         return f"{self.user} - {self.book} (Page {self.last_page})"
 
+
 class BookNote(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
     note = models.TextField()
+    page = models.PositiveIntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.book.title} - Page {self.page}"
 
 
 class Highlight(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
     text = models.TextField()
-    page = models.IntegerField()
+    page = models.PositiveIntegerField(default=1)
+
+    # Highlight appearance and PDF positioning
+    color = models.CharField(max_length=20, default='#FFE66D')
+    position_data = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.book.title} - Highlight Page {self.page}"
 
 
 class Bookmark(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
-    page = models.IntegerField()
+    page = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'book', 'page'],
+                name='unique_user_bookmark_page'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.book.title} - Page {self.page}"
+
+
+class BookAnnotation(models.Model):
+    ANNOTATION_TYPES = [
+        ('pencil', 'Pencil Drawing'),
+        ('underline', 'Underline'),
+        ('shape', 'Shape'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    book = models.ForeignKey(Book, on_delete=models.CASCADE)
+
+    page = models.PositiveIntegerField(default=1)
+
+    annotation_type = models.CharField(
+        max_length=20,
+        choices=ANNOTATION_TYPES
+    )
+
+    color = models.CharField(max_length=20, default='#FF0000')
+    position_data = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return (
+            f"{self.user} - {self.book.title} "
+            f"- {self.annotation_type} - Page {self.page}"
+        )
+
 
 
 

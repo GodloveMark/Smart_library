@@ -78,110 +78,478 @@ from .models import Book
 from books.models import BookNote
 from django.contrib.auth.decorators import login_required
 
+#@login_required
+#def read_book(request, pk):
+#    book = get_object_or_404(Book, pk=pk)
+#    
+#    # Fetch existing notes and highlights to display in the sidebar
+#    notes = BookNote.objects.filter(user=request.user, book=book).order_by('-created_at')
+#    highlights = Highlight.objects.filter(user=request.user, book=book).order_by('-created_at')
+#    
+#    # Retrieve last progress
+#    progress = ReadingProgress.objects.filter(user=request.user, book=book).first()
+#    start_page = progress.last_page if progress else 1
+#
+#    context = {
+#        'book': book,
+#        'notes': notes,
+#        'highlights': highlights,
+#        'start_page': start_page,
+#    }
+#    return render(request, 'books/read.html', context)
+
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import BookNote, Book
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404
+from .models import Book, BookNote, Highlight, Bookmark, ReadingProgress, BookAnnotation
+
+#@login_required
+#@csrf_exempt
+#def add_note(request, pk):
+#    if request.method == 'POST':
+#        data = json.loads(request.body)
+#        book = get_object_or_404(Book, pk=pk)
+#        note = BookNote.objects.create(
+#            user=request.user, 
+#            book=book, 
+#            note=data.get('note', '').strip(),
+#            page=data.get('page', 1)
+#        )
+#        return JsonResponse({'note': note.note, 'page': note.page})
+#
+#
+#@csrf_exempt
+#@login_required
+#def save_highlight(request, pk):
+#    data = json.loads(request.body)
+#    text = data.get('text')
+#    page = data.get('page')
+#
+#    book = get_object_or_404(Book, pk=pk)
+#
+#    Highlight.objects.create(
+#        user=request.user,
+#        book=book,
+#        text=text,
+#        page=page
+#    )
+#
+#    return JsonResponse({'status': 'saved'})
+#
+#
+#from .models import Book, Bookmark  
+#
+#@login_required
+#def bookmark_page(request, pk):
+#    if request.method == "POST":
+#        data = json.loads(request.body)
+#        page = data.get("page")
+#
+#        book = get_object_or_404(Book, pk=pk)
+#
+#        Bookmark.objects.create(
+#            user=request.user,
+#            book=book,
+#            page=page
+#        )
+#
+#        return JsonResponse({"status": "saved"})
+#
+#    return JsonResponse({"error": "Invalid request"}, status=400)
+#
+#
+#
+#
+#
+#
+#from .models import Book, ReadingProgress
+#
+#
+#@login_required
+#def save_progress(request, pk):
+#    if request.method == "POST":
+#        data = json.loads(request.body)
+#        page = data.get("page")
+#        book = get_object_or_404(Book, pk=pk)
+#
+#        # Atomic update or create
+#        ReadingProgress.objects.update_or_create(
+#            user=request.user, book=book,
+#            defaults={'last_page': page}
+#        )
+#        return JsonResponse({"status": "saved", "page": page})
+#    return JsonResponse({"error": "Invalid request"}, status=400)
+
+
+
+
+def get_json_data(request):
+    """Safely read JSON request data."""
+    try:
+        data = json.loads(request.body or b'{}')
+        if not isinstance(data, dict):
+            return None
+        return data
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def valid_page(value):
+    """Validate PDF page number."""
+    try:
+        page = int(value)
+        return page if page >= 1 else None
+    except (TypeError, ValueError):
+        return None
+
+from django.views.decorators.http import require_POST
+
+
+
+@login_required
+@require_POST
+def delete_study_item(request, pk, item_type, item_id):
+    book = get_object_or_404(Book, pk=pk)
+
+    # Only allow deletion of the current user's records
+    models_map = {
+        'note': BookNote,
+        'highlight': Highlight,
+        'bookmark': Bookmark,
+        'drawing': BookAnnotation,
+        'progress': ReadingProgress,
+        'history': ReadingProgress,
+    }
+
+    model = models_map.get(item_type)
+
+    if model is None:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid item type.'
+        }, status=400)
+
+    try:
+        with transaction.atomic():
+            item = get_object_or_404(
+                model,
+                pk=item_id,
+                book=book,
+                user=request.user
+            )
+
+            item.delete()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'{item_type.capitalize()} deleted successfully.',
+            'item_type': item_type,
+            'item_id': item_id,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+
+import json
+
 @login_required
 def read_book(request, pk):
     book = get_object_or_404(Book, pk=pk)
-    
-    # Fetch existing notes and highlights to display in the sidebar
-    notes = BookNote.objects.filter(user=request.user, book=book).order_by('-created_at')
-    highlights = Highlight.objects.filter(user=request.user, book=book).order_by('-created_at')
-    
-    # Retrieve last progress
-    progress = ReadingProgress.objects.filter(user=request.user, book=book).first()
+
+    notes = BookNote.objects.filter(
+        user=request.user,
+        book=book
+    ).order_by('-created_at')
+
+    highlights = Highlight.objects.filter(
+        user=request.user,
+        book=book
+    ).order_by('-created_at')
+
+    bookmarks = Bookmark.objects.filter(
+        user=request.user,
+        book=book
+    ).order_by('page')
+
+    annotations = BookAnnotation.objects.filter(
+        user=request.user,
+        book=book
+    ).order_by('created_at')
+
+    progress = ReadingProgress.objects.filter(
+        user=request.user,
+        book=book
+    ).first()
+
     start_page = progress.last_page if progress else 1
 
     context = {
         'book': book,
         'notes': notes,
         'highlights': highlights,
+        'bookmarks': bookmarks,
+        'annotations': annotations,
         'start_page': start_page,
+
+        'highlights_json': json.dumps([
+            {
+                'id': h.id,
+                'page': h.page,
+                'text': h.text,
+                'color': h.color,
+                'position_data': h.position_data or {}
+            }
+            for h in highlights
+        ]),
+
+        'annotations_json': json.dumps([
+            {
+                'id': a.id,
+                'page': a.page,
+                'color': a.color,
+                'annotation_type': a.annotation_type,
+                'position_data': a.position_data or {}
+            }
+            for a in annotations
+        ]),
     }
+
     return render(request, 'books/read.html', context)
 
-    import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from .models import BookNote, Book
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404
-from .models import Book, BookNote, Highlight, Bookmark, ReadingProgress
+
 
 @login_required
-@csrf_exempt
 def add_note(request, pk):
-    if request.method == 'POST':
-        data = json.loads(request.body)
-        book = get_object_or_404(Book, pk=pk)
-        note = BookNote.objects.create(
-            user=request.user, 
-            book=book, 
-            note=data.get('note', '').strip(),
-            page=data.get('page', 1)
+    if request.method != 'POST':
+        return JsonResponse(
+            {'error': 'Invalid request method'},
+            status=405
         )
-        return JsonResponse({'note': note.note, 'page': note.page})
 
+    data = get_json_data(request)
 
-@csrf_exempt
-@login_required
-def save_highlight(request, pk):
-    data = json.loads(request.body)
-    text = data.get('text')
-    page = data.get('page')
+    if data is None:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    note_text = data.get('note', '').strip()
+    page = valid_page(data.get('page', 1))
+
+    if not note_text:
+        return JsonResponse(
+            {'error': 'Note cannot be empty'},
+            status=400
+        )
+
+    if page is None:
+        return JsonResponse(
+            {'error': 'Invalid page number'},
+            status=400
+        )
 
     book = get_object_or_404(Book, pk=pk)
 
-    Highlight.objects.create(
+    note = BookNote.objects.create(
         user=request.user,
         book=book,
-        text=text,
+        note=note_text,
         page=page
     )
 
-    return JsonResponse({'status': 'saved'})
+    return JsonResponse({
+        'status': 'saved',
+        'id': note.id,
+        'note': note.note,
+        'page': note.page,
+        'created_at': note.created_at.isoformat(),
+    })
 
 
-from .models import Book, Bookmark  
+@login_required
+def save_highlight(request, pk):
+    if request.method != 'POST':
+        return JsonResponse(
+            {'error': 'Invalid request method'},
+            status=405
+        )
+
+    data = get_json_data(request)
+
+    if data is None:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    text = data.get('text', '').strip()
+    page = valid_page(data.get('page'))
+    color = data.get('color', '#FFE66D')
+    position_data = data.get('position_data', {})
+
+    if not text or page is None:
+        return JsonResponse(
+            {'error': 'Highlight text and valid page are required'},
+            status=400
+        )
+
+    if not isinstance(position_data, dict):
+        return JsonResponse(
+            {'error': 'Invalid highlight position data'},
+            status=400
+        )
+
+    book = get_object_or_404(Book, pk=pk)
+
+    highlight = Highlight.objects.create(
+        user=request.user,
+        book=book,
+        text=text,
+        page=page,
+        color=color,
+        position_data=position_data
+    )
+
+    return JsonResponse({
+        'status': 'saved',
+        'id': highlight.id,
+        'text': highlight.text,
+        'page': highlight.page,
+        'color': highlight.color,
+    })
+
 
 @login_required
 def bookmark_page(request, pk):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        page = data.get("page")
-
-        book = get_object_or_404(Book, pk=pk)
-
-        Bookmark.objects.create(
-            user=request.user,
-            book=book,
-            page=page
+    if request.method != 'POST':
+        return JsonResponse(
+            {'error': 'Invalid request method'},
+            status=405
         )
 
-        return JsonResponse({"status": "saved"})
+    data = get_json_data(request)
 
-    return JsonResponse({"error": "Invalid request"}, status=400)
+    if data is None:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
+    page = valid_page(data.get('page'))
 
+    if page is None:
+        return JsonResponse(
+            {'error': 'Invalid page number'},
+            status=400
+        )
 
+    book = get_object_or_404(Book, pk=pk)
 
+    bookmark, created = Bookmark.objects.get_or_create(
+        user=request.user,
+        book=book,
+        page=page
+    )
 
-
-from .models import Book, ReadingProgress
+    return JsonResponse({
+        'status': 'saved' if created else 'already_saved',
+        'id': bookmark.id,
+        'page': bookmark.page,
+    })
 
 
 @login_required
 def save_progress(request, pk):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        page = data.get("page")
-        book = get_object_or_404(Book, pk=pk)
-
-        # Atomic update or create
-        ReadingProgress.objects.update_or_create(
-            user=request.user, book=book,
-            defaults={'last_page': page}
+    if request.method != 'POST':
+        return JsonResponse(
+            {'error': 'Invalid request method'},
+            status=405
         )
-        return JsonResponse({"status": "saved", "page": page})
-    return JsonResponse({"error": "Invalid request"}, status=400)
+
+    data = get_json_data(request)
+
+    if data is None:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    page = valid_page(data.get('page'))
+
+    if page is None:
+        return JsonResponse(
+            {'error': 'Invalid page number'},
+            status=400
+        )
+
+    book = get_object_or_404(Book, pk=pk)
+
+    progress, created = ReadingProgress.objects.update_or_create(
+        user=request.user,
+        book=book,
+        defaults={'last_page': page}
+    )
+
+    return JsonResponse({
+        'status': 'saved',
+        'page': progress.last_page,
+    })
+
+
+@login_required
+def save_annotation(request, pk):
+    """Save pencil drawings, underlines and shapes."""
+
+    if request.method != 'POST':
+        return JsonResponse(
+            {'error': 'Invalid request method'},
+            status=405
+        )
+
+    data = get_json_data(request)
+
+    if data is None:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    page = valid_page(data.get('page'))
+    annotation_type = data.get('annotation_type')
+    color = data.get('color', '#FF0000')
+    position_data = data.get('position_data', {})
+
+    allowed_types = dict(BookAnnotation.ANNOTATION_TYPES)
+
+    if page is None:
+        return JsonResponse(
+            {'error': 'Invalid page number'},
+            status=400
+        )
+
+    if annotation_type not in allowed_types:
+        return JsonResponse(
+            {'error': 'Invalid annotation type'},
+            status=400
+        )
+
+    if not isinstance(position_data, dict) or not position_data:
+        return JsonResponse(
+            {'error': 'Annotation drawing data is required'},
+            status=400
+        )
+
+    book = get_object_or_404(Book, pk=pk)
+
+    annotation = BookAnnotation.objects.create(
+        user=request.user,
+        book=book,
+        page=page,
+        annotation_type=annotation_type,
+        color=color,
+        position_data=position_data
+    )
+
+    return JsonResponse({
+        'status': 'saved',
+        'id': annotation.id,
+        'page': annotation.page,
+        'annotation_type': annotation.annotation_type,
+    })
 
 
 

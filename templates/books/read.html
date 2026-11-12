@@ -1,348 +1,822 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>{{ book.title }} <small class="text-muted">| {{ book.author }}</small></h2>
-        <div>
-            <button class="btn btn-outline-primary btn-sm me-2" onclick="getSummary()" id="summary-btn">
-                <i class="bi bi-stars"></i> Generate Summary
-            </button>
-            <a href="{% url 'list' %}" class="btn btn-outline-secondary btn-sm">Back to Library</a>
-        </div>
-        <div id="summary-box" class="mt-4 p-3 border rounded bg-light" style="display:none;">
-    <h5>📄 Book Summary</h5>
-    <div id="summary-content" style="white-space: pre-wrap;"></div>
-</div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center sticky-top" style="z-index: 1020;">
-                    <div>
-                        <button id="prev-page" class="btn btn-sm btn-dark">←</button>
-                        <span class="mx-2 font-monospace">Page <strong id="page-num">{{ start_page }}</strong> / <span id="page-count">-</span></span>
-                        <button id="next-page" class="btn btn-sm btn-dark">→</button>
-                    </div>
-                    <div>
-                        <div class="btn-group me-2">
-                            <button id="zoom-out" class="btn btn-sm btn-light border">-</button>
-                            <button id="zoom-in" class="btn btn-sm btn-light border">+</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card-body p-0 bg-light d-flex justify-content-center" style="height: 78vh; overflow: auto;" id="viewer-container">
-                    <div id="pdf-wrapper" style="position: relative; margin: 20px auto; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
-                        <canvas id="pdf-canvas" style="display: block;"></canvas>
-                        <div id="text-layer" class="textLayer"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card shadow-sm" style="height: 85vh; display: flex; flex-direction: column;">
-                <div class="card-header bg-primary p-0">
-                    <ul class="nav nav-tabs nav-fill border-0" id="sidebarTab" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active text-white border-0 py-3" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes-panel" type="button" role="tab">Notes</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link text-white border-0 py-3" id="ai-tab" data-bs-toggle="tab" data-bs-target="#ai-panel" type="button" role="tab">AI Assistant</button>
-                        </li>
-                    </ul>
-                </div>
-
-                <div class="card-body tab-content flex-grow-1 overflow-hidden" style="display: flex; flex-direction: column;">
-                    <div class="tab-pane fade show active flex-grow-1 d-flex flex-column overflow-hidden" id="notes-panel" role="tabpanel">
-                        <div id="notes-list" class="list-group list-group-flush mb-3 flex-grow-1 overflow-auto">
-                            {% for highlight in highlights %}
-                            <div class="list-group-item px-0 border-start border-warning border-4 ps-2">
-                                <small class="text-muted">Highlight - P. {{ highlight.page }}</small>
-                                <p class="small mb-1" style="font-style: italic;">"{{ highlight.text }}"</p>
-                            </div>
-                            {% endfor %}
-                            {% for note in notes %}
-                            <div class="list-group-item px-0">
-                                <span class="badge bg-info mb-1">Page {{ note.page }}</span>
-                                <p class="small mb-1">{{ note.note }}</p>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <div class="mt-auto pt-3 border-top bg-white">
-                            <textarea id="note-text" class="form-control mb-2" rows="3" placeholder="Write a note for page {{ start_page }}..."></textarea>
-                            <button id="add-note" class="btn btn-primary w-100">Save Note</button>
-                        </div>
-                    </div>
-
-                    <div class="tab-pane fade flex-grow-1 d-flex flex-column overflow-hidden" id="ai-panel" role="tabpanel">
-                        <div id="chat-history" class="flex-grow-1 overflow-auto p-2 bg-light mb-2 rounded border" style="min-height: 300px;">
-                            <div class="text-muted text-center py-5" id="chat-placeholder">
-                                <i class="bi bi-robot fs-1 d-block mb-2"></i>
-                                <strong>AI is ready.</strong><br>Ask me a question about this book.
-                            </div>
-                        </div>
-                        <div class="input-group">
-                            <input type="text" id="ai-query" class="form-control" placeholder="Type your question...">
-                            <button class="btn btn-primary" id="send-ai-btn">Ask</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
-.textLayer {
+.study-reader{max-width:1800px;margin:auto;color:#172033}.sr-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}.sr-title{font-size:clamp(1.2rem,2vw,1.7rem);font-weight:750;margin:0}.sr-muted{color:#64748b}.sr-grid{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:1rem;align-items:start}.sr-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 5px 22px #0f172a0d;overflow:hidden;min-width:0}.sr-toolbar{padding:.7rem .85rem;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:.55rem;flex-wrap:wrap}.sr-tools{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}.sr-btn{border:1px solid #d7deea;background:#fff;color:#263449;border-radius:8px;padding:.42rem .65rem;min-height:36px;cursor:pointer;font-size:.84rem}.sr-btn:hover:not(:disabled){background:#eff6ff;border-color:#93c5fd}.sr-btn:disabled{opacity:.45;cursor:not-allowed}.sr-btn.active{background:#dbeafe;border-color:#60a5fa;color:#1d4ed8;font-weight:700}.sr-primary{background:#2563eb;border-color:#2563eb;color:white}.sr-input{border:1px solid #d7deea;border-radius:8px;padding:.45rem .6rem;min-height:36px}.sr-page{width:58px;text-align:center}.sr-view{height:73vh;min-height:420px;overflow:auto;background:#e9eef5;padding:18px;text-align:center}.sr-wrapper{position:relative;display:inline-block;vertical-align:top;background:#fff;box-shadow:0 10px 28px #0f172a33;line-height:0}#pdf-canvas{display:block}#text-layer{position:absolute;inset:0;overflow:hidden;line-height:1;z-index:2}#text-layer span,#text-layer br{color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0 0}#text-layer ::selection{background:#2563eb44}#annotation-canvas{position:absolute;inset:0;z-index:3;pointer-events:none;touch-action:none}#annotation-canvas.drawing{pointer-events:auto;cursor:crosshair}.sr-progress{height:5px;background:#e2e8f0}.sr-fill{height:100%;width:0;background:#2563eb}.sr-status{padding:.5rem .85rem;display:flex;justify-content:space-between;gap:.6rem;flex-wrap:wrap;color:#64748b;font-size:.8rem}.sr-sidebar{display:flex;flex-direction:column;max-height:calc(73vh + 100px);min-height:420px}.sr-sidehead{padding:1rem;border-bottom:1px solid #e2e8f0}.sr-sidehead h2{font-size:1rem;font-weight:750;margin:0}.sr-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:.2rem;padding:.6rem;border-bottom:1px solid #e2e8f0}.sr-tab{border:0;border-radius:7px;background:#f1f5f9;padding:.55rem .1rem;font-size:.75rem;color:#475569}.sr-tab.active{background:#dbeafe;color:#1d4ed8;font-weight:700}.sr-panel{display:none;overflow:auto;flex:1;min-height:120px;padding:.75rem}.sr-panel.active{display:block}.sr-item{border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:9px;padding:.65rem;margin-bottom:.6rem;overflow-wrap:anywhere}.sr-item p{white-space:pre-wrap;margin:.3rem 0 0;font-size:.88rem}.sr-highlight{border-left-color:#eab308;background:#fffbeb}.sr-bookmark{border-left-color:#2563eb}.sr-drawing{border-left-color:#8b5cf6}.sr-meta{font-size:.73rem;color:#64748b;display:flex;justify-content:space-between}.sr-actions{margin-top:.4rem}.sr-mini{border:1px solid #e2e8f0;background:white;border-radius:6px;padding:.25rem .45rem;font-size:.75rem}.sr-empty{text-align:center;color:#64748b;padding:1.5rem .4rem;font-size:.85rem}.sr-noteform{padding:.8rem;border-top:1px solid #e2e8f0;background:#f8fafc}.sr-noteform textarea{width:100%;min-height:80px;resize:vertical}.sr-feedback{font-size:.8rem;min-height:1.2rem;margin-top:.3rem}.sr-colors{display:flex;gap:.35rem}.sr-color{width:21px;height:21px;border:2px solid #ffffff;border-radius:50%;box-shadow:0 0 0 1px #94a3b8;cursor:pointer}.sr-color.active{outline:2px solid #334155;outline-offset:2px}.sr-error{padding:.7rem;margin:1rem;background:#fef2f2;color:#991b1b;border-radius:8px}.sr-hidden{display:none!important}.sr-card:fullscreen{display:flex;flex-direction:column}.sr-card:fullscreen .sr-view{flex:1;height:auto}
+@media(max-width:1000px){.sr-grid{grid-template-columns:minmax(0,1fr) 310px}}@media(max-width:820px){.sr-grid{grid-template-columns:1fr}.sr-sidebar{max-height:none}.sr-panel{max-height:300px}.sr-view{height:62vh;min-height:350px}}@media(max-width:520px){.sr-view{padding:9px}.sr-toolbar{padding:.55rem}.sr-tools{justify-content:center;width:100%}}
+
+#text-layer {
     position: absolute;
-    left: 0; top: 0; right: 0; bottom: 0;
+    inset: 0;
     overflow: hidden;
-    opacity: 0.2;
-    line-height: 1.0;
+    line-height: 1;
     z-index: 2;
-    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
 }
-.textLayer span {
+
+#text-layer span,
+#text-layer br {
     color: transparent;
     position: absolute;
     white-space: pre;
     cursor: text;
-    transform-origin: 0% 0%;
+    transform-origin: 0 0;
 }
-.nav-tabs .nav-link.active {
-    background-color: rgba(255,255,255,0.2) !important;
-    border: none;
-    font-weight: bold;
+
+#text-layer ::selection {
+    background: rgba(255, 230, 109, 0.65);
 }
-#chat-history { scroll-behavior: smooth; }
+
+
+.sr-mini.text-danger {
+    color: #dc2626 !important;
+    border-color: #fecaca;
+}
+
+.sr-mini.text-danger:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+}
+
+.sr-mini:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+#text-layer {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+#text-layer span::selection {
+    background: rgba(255, 230, 109, 0.65);
+    color: transparent;
+}
+
+#text-layer span::-moz-selection {
+    background: rgba(255, 230, 109, 0.65);
+    color: transparent;
+}
+
 </style>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
-// PDF Config
-const url = "{{ book.file.url }}";
-const pdfjsLib = window['pdfjs-dist/build/pdf'];
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js";
-
-let pdfDoc = null,
-    pageNum = parseInt("{{ start_page }}") || 1,
-    pageIsRendering = false,
-    pageNumIsPending = null,
-    scale = 1.4;
-
-const canvas = document.getElementById('pdf-canvas');
-const ctx = canvas.getContext('2d');
-const textLayerDiv = document.getElementById('text-layer');
-const aiBtn = document.getElementById('send-ai-btn');
-const aiInput = document.getElementById('ai-query');
-const chatHistory = document.getElementById('chat-history');
-
-let isLoading = false;
-
-// ==============================
-// 🛠️ UTILS
-// ==============================
-function escapeHTML(str) {
-    return str.replace(/[&<>"']/g, m => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-    })[m]);
-}
-
-// ==============================
-// 📄 PDF RENDERING
-// ==============================
-function renderPage(num) {
-    pageIsRendering = true;
-    pdfDoc.getPage(num).then(page => {
-        const viewport = page.getViewport({ scale: scale });
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const wrapper = document.getElementById('pdf-wrapper');
-        wrapper.style.width = canvas.width + "px";
-        wrapper.style.height = canvas.height + "px";
-
-        const renderContext = { canvasContext: ctx, viewport: viewport };
-
-        page.render(renderContext).promise.then(() => {
-            pageIsRendering = false;
-            if (pageNumIsPending !== null) {
-                renderPage(pageNumIsPending);
-                pageNumIsPending = null;
-            }
-            return page.getTextContent();
-        }).then(textContent => {
-            textLayerDiv.innerHTML = "";
-            pdfjsLib.renderTextLayer({
-                textContentSource: textContent,
-                container: textLayerDiv,
-                viewport: viewport,
-                textDivs: []
-            });
-        });
-
-        document.getElementById('page-num').textContent = num;
-        // Update note placeholder context
-        document.getElementById('note-text').placeholder = `Write a note for page ${num}...`;
-    });
-}
-
-function queueRenderPage(num) {
-    if (pageIsRendering) { pageNumIsPending = num; } 
-    else { renderPage(num); }
-}
-
-// ==============================
-// 🤖 AI & CHAT
-// ==============================
-function addMessage(sender, message, isUser=false) {
-    const placeholder = document.getElementById('chat-placeholder');
-    if (placeholder) placeholder.remove();
-
-    const align = isUser ? "text-end" : "text-start";
-    const bg = isUser ? "bg-primary text-white" : "bg-white border";
-
-    chatHistory.innerHTML += `
-        <div class="mb-3 ${align}">
-            <small class="text-muted d-block mb-1">${sender}</small>
-            <span class="${bg} p-2 rounded d-inline-block shadow-sm" style="max-width: 85%;">
-                ${message}
-            </span>
+<div class="container-fluid py-4 study-reader">
+  <header class="sr-head">
+    <div><div class="sr-muted small mb-1"><i class="bi bi-book me-1"></i>Library / Study Workspace</div><h1 class="sr-title">{{ book.title }}</h1><div class="sr-muted">{{ book.author }}</div></div>
+    <a href="{% url 'list' %}" class="sr-btn text-decoration-none"><i class="bi bi-arrow-left me-1"></i>Back to Library</a>
+  </header>
+  <div class="sr-grid">
+    <section class="sr-card" id="reader-card">
+      <div class="sr-toolbar">
+        <div class="sr-tools">
+          <button class="sr-btn" id="prev-page" type="button">←</button>
+          <label for="page-input" class="small">Page</label>
+          <input class="sr-input sr-page" id="page-input" type="number" min="1" value="{{ start_page|default:1 }}">
+          <span class="sr-muted small">/ <span id="page-count">—</span></span>
+          <button class="sr-btn" id="next-page" type="button">→</button>
         </div>
-    `;
-    chatHistory.scrollTop = chatHistory.scrollHeight;
-}
+        <div class="sr-tools">
+          <button class="sr-btn" id="zoom-out" type="button">−</button><span id="zoom-label" class="sr-muted small">100%</span>
+          <button class="sr-btn" id="zoom-in" type="button">+</button>
+          <button class="sr-btn" id="fit-width" type="button">Fit width</button>
+          <button class="sr-btn" id="reset-zoom" type="button">Reset</button>
+          <button class="sr-btn" id="fullscreen-btn" type="button"><i class="bi bi-arrows-fullscreen"></i></button>
+        </div>
+      </div>
+      <div class="sr-toolbar">
+        <div class="sr-tools">
+          <button class="sr-btn active" data-tool="select" type="button">Select</button>
+          <button class="sr-btn" data-tool="highlight" type="button"><i class="bi bi-highlighter"></i> Highlight</button>
+          <button class="sr-btn" data-tool="pencil" type="button"><i class="bi bi-pencil"></i> Pencil</button>
+          <button class="sr-btn" data-tool="eraser" type="button"><i class="bi bi-eraser"></i> Eraser</button>
+          <button class="sr-btn" id="undo-btn" type="button" title="Undo">↶</button>
+          <button class="sr-btn" id="redo-btn" type="button" title="Redo">↷</button>
+        </div>
+        <div class="sr-tools">
+          <div class="sr-colors">
+            <button class="sr-color active" data-color="#FFE66D" style="background:#FFE66D" title="Yellow" type="button"></button>
+            <button class="sr-color" data-color="#A8E6CF" style="background:#A8E6CF" title="Green" type="button"></button>
+            <button class="sr-color" data-color="#A0C4FF" style="background:#A0C4FF" title="Blue" type="button"></button>
+            <button class="sr-color" data-color="#FFADAD" style="background:#FFADAD" title="Pink" type="button"></button>
+            <button class="sr-color" data-color="#D7B5FF" style="background:#D7B5FF" title="Purple" type="button"></button>
+          </div>
+          <button class="sr-btn" id="bookmark-btn" type="button"><i class="bi bi-bookmark-plus"></i> Bookmark</button>
+        </div>
+      </div>
+      <div id="viewer-container" class="sr-view">
+        <div id="pdf-wrapper" class="sr-wrapper"><canvas id="pdf-canvas"></canvas><div id="text-layer"></div><canvas id="annotation-canvas"></canvas></div>
+        <div id="reader-error" class="sr-error sr-hidden" role="alert"></div>
+      </div>
+      <div class="sr-progress"><div class="sr-fill" id="progress-fill"></div></div>
+      <div class="sr-status"><span id="reader-status" role="status" aria-live="polite">Loading document…</span><span id="progress-text">0% read</span></div>
+    </section>
 
-function getSummary() {
-    const box = document.getElementById("summary-box");
-    const content = document.getElementById("summary-content");
+    <aside class="sr-card sr-sidebar">
+      <div class="sr-sidehead"><h2><i class="bi bi-journal-bookmark me-2"></i>My Study Materials</h2><div class="sr-muted small mt-1">Notes, highlights, bookmarks and drawings</div></div>
+      <div class="sr-tabs">
+        <button class="sr-tab active" data-panel="notes-panel" type="button">Notes</button>
+        <button class="sr-tab" data-panel="highlights-panel" type="button">Highlights</button>
+        <button class="sr-tab" data-panel="bookmarks-panel" type="button">Bookmarks</button>
+        <button class="sr-tab" data-panel="drawings-panel" type="button">Drawings</button>
+      </div>
+      
+<div class="sr-panel active" id="notes-panel">
+    <div id="notes-list">
+        {% for note in notes %}
+        <article class="sr-item"
+                 data-item-type="note"
+                 data-item-id="{{ note.id }}">
 
-    // Show loading
-    box.style.display = "block";
-    content.innerHTML = "⏳ Generating summary...";
+            <div class="sr-meta">
+                <span>Note · Page {{ note.page|default:1 }}</span>
+                <span>{{ note.created_at|date:"M d, Y" }}</span>
+            </div>
 
-    fetch("{% url 'summarize_book' book.id %}")
-    .then(res => {
-        if (!res.ok) throw new Error("Server error");
-        return res.json();
-    })
-    .then(data => {
-        content.innerText = data.summary;
-    })
-    .catch(err => {
-        content.innerHTML = "<span class='text-danger'>Failed to load summary</span>";
-    });
-}
+            <p>{{ note.note }}</p>
 
-if (aiBtn) {
-    aiBtn.addEventListener('click', async () => {
-        if (isLoading) return;
-        const query = aiInput.value.trim();
-        if (!query) return;
+            <div class="sr-actions">
+                <button class="sr-mini"
+                        type="button"
+                        data-goto-page="{{ note.page|default:1 }}">
+                    <i class="bi bi-book-open"></i> Open page
+                </button>
 
-        isLoading = true;
-        aiBtn.disabled = true;
-        addMessage("You", escapeHTML(query), true);
-        aiInput.value = "";
+                <button class="sr-mini text-danger"
+                        type="button"
+                        data-delete-type="note"
+                        data-delete-id="{{ note.id }}">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </article>
+        {% empty %}
+        <div class="sr-empty" id="notes-empty">
+            No notes yet. Add your first study note below.
+        </div>
+        {% endfor %}
+    </div>
+</div>
 
-        const loadingId = "loading-" + Date.now();
-        chatHistory.innerHTML += `<div id="${loadingId}" class="text-muted small mb-3">AI is thinking...</div>`;
 
-        try {
-            const response = await fetch("{% url 'chat_with_book' book.id %}", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": "{{ csrf_token }}"
-                },
-                body: JSON.stringify({ message: query, page: pageNum })
-            });
-            const data = await response.json();
-            document.getElementById(loadingId).remove();
-            addMessage("AI Assistant", escapeHTML(data.answer || "I couldn't find an answer."));
-        } catch (e) {
-            document.getElementById(loadingId).innerHTML = `<span class="text-danger">Error connecting to AI.</span>`;
-        } finally {
-            isLoading = false;
-            aiBtn.disabled = false;
-        }
-    });
-}
+<div class="sr-panel" id="highlights-panel">
+    <div id="highlights-list">
+        {% for highlight in highlights %}
+        <article class="sr-item sr-highlight"
+                 data-item-type="highlight"
+                 data-item-id="{{ highlight.id }}"
+                 data-highlight-id="{{ highlight.id }}"
+                 data-page="{{ highlight.page }}"
+                 data-color="{{ highlight.color|default:'#FFE66D' }}"
+                 data-position="{{ highlight.position_data|default:'{}'|escape }}">
 
-// ==============================
-// 📝 NOTES
-// ==============================
-document.getElementById('add-note')?.addEventListener('click', async () => {
-    const btn = document.getElementById('add-note');
-    const noteArea = document.getElementById('note-text');
-    const noteText = noteArea.value.trim();
-    
-    if (!noteText) return;
+            <div class="sr-meta">
+                <span>Highlight · Page {{ highlight.page }}</span>
+                <span>{{ highlight.created_at|date:"M d, Y" }}</span>
+            </div>
 
-    btn.disabled = true;
+            <p>{{ highlight.text }}</p>
+
+            <div class="sr-actions">
+                <button class="sr-mini"
+                        type="button"
+                        data-goto-page="{{ highlight.page }}">
+                    <i class="bi bi-book-open"></i> Open page
+                </button>
+
+                <button class="sr-mini text-danger"
+                        type="button"
+                        data-delete-type="highlight"
+                        data-delete-id="{{ highlight.id }}">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </article>
+        {% empty %}
+        <div class="sr-empty" id="highlights-empty">
+            Select text, then choose Highlight to save it.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+
+<div class="sr-panel" id="bookmarks-panel">
+    <div id="bookmarks-list">
+        {% for bookmark in bookmarks %}
+        <article class="sr-item sr-bookmark"
+                 data-item-type="bookmark"
+                 data-item-id="{{ bookmark.id }}"
+                 data-bookmark-id="{{ bookmark.id }}">
+
+            <div class="sr-meta">
+                <span>Bookmarked page</span>
+                <span>Page {{ bookmark.page }}</span>
+            </div>
+
+            <div class="sr-actions">
+                <button class="sr-mini"
+                        type="button"
+                        data-goto-page="{{ bookmark.page }}">
+                    <i class="bi bi-book-open"></i> Open page
+                </button>
+
+                <button class="sr-mini text-danger"
+                        type="button"
+                        data-delete-type="bookmark"
+                        data-delete-id="{{ bookmark.id }}">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </article>
+        {% empty %}
+        <div class="sr-empty" id="bookmarks-empty">
+            Your saved pages will appear here.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+
+<div class="sr-panel" id="drawings-panel">
+    <div id="drawings-list">
+        {% for annotation in annotations %}
+        <article class="sr-item sr-drawing"
+                 data-item-type="drawing"
+                 data-item-id="{{ annotation.id }}"
+                 data-annotation-id="{{ annotation.id }}"
+                 data-page="{{ annotation.page }}"
+                 data-color="{{ annotation.color }}"
+                 data-position="{{ annotation.position_data|escape }}">
+
+            <div class="sr-meta">
+                <span>{{ annotation.get_annotation_type_display }}</span>
+                <span>Page {{ annotation.page }}</span>
+            </div>
+
+            <div class="sr-actions">
+                <button class="sr-mini"
+                        type="button"
+                        data-goto-page="{{ annotation.page }}">
+                    <i class="bi bi-book-open"></i> Open page
+                </button>
+
+                <button class="sr-mini text-danger"
+                        type="button"
+                        data-delete-type="drawing"
+                        data-delete-id="{{ annotation.id }}">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        </article>
+        {% empty %}
+        <div class="sr-empty" id="drawings-empty">
+            Pencil marks will appear here.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+      <form class="sr-noteform" id="note-form">{% csrf_token %}
+        <label class="form-label fw-semibold small" for="note-text">Add a note for page <span id="note-page">{{ start_page|default:1 }}</span></label>
+        <textarea class="sr-input" id="note-text" placeholder="Write an idea, question, or reminder…" required></textarea>
+        <button class="sr-btn sr-primary w-100 mt-2" id="save-note-btn" type="submit">Save note</button>
+        <div class="sr-feedback" id="note-feedback" role="status" aria-live="polite"></div>
+      </form>
+    </aside>
+  </div>
+</div>
+{{ book.file.url|json_script:"book-pdf-url" }}
+{{ highlights_json|json_script:"saved-highlights-data" }}
+{{ annotations_json|json_script:"saved-annotations-data" }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $=id=>document.getElementById(id), pdfUrl=JSON.parse($('book-pdf-url').textContent);
+const pdfjs=window['pdfjs-dist/build/pdf'];
+const csrf=document.querySelector('#note-form [name=csrfmiddlewaretoken]').value;
+const api = {
+    note: "{% url 'add_note' book.id %}",
+    highlight: "{% url 'save_highlight' book.id %}",
+    bookmark: "{% url 'bookmark_page' book.id %}",
+    progress: "{% url 'save_progress' book.id %}",
+    annotation: "{% url 'save_annotation' book.id %}",
+    deleteItem: "{% url 'delete_study_item' book.id 'note' 0 %}"
+};
+
+
+// ======================================
+// DELETE NOTES, HIGHLIGHTS, BOOKMARKS
+// AND DRAWINGS
+// ======================================
+
+document.addEventListener('click', async function(e) {
+
+    const button = e.target.closest('[data-delete-type]');
+
+    if (!button) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const type = button.dataset.deleteType;
+    const id = Number(button.dataset.deleteId);
+
+    if (!['note', 'highlight', 'bookmark', 'drawing', 'progress', 'history'].includes(type)) {
+        status('Invalid item type.');
+        return;
+    }
+
+    if (!Number.isInteger(id) || id <= 0) {
+        status('Invalid item ID. Please refresh the page and try again.');
+        return;
+    }
+
+    const confirmed = confirm(
+        'Are you sure you want to delete this ' + type + '?'
+    );
+
+    if (!confirmed) return;
+
+    const article = button.closest('.sr-item');
+    const parentList = article?.parentElement;
+
+    if (!article || !parentList) return;
+
+    const originalText = button.innerHTML;
+
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
+
     try {
-        const response = await fetch("{% url 'add_note' book.id %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": "{{ csrf_token }}"
-            },
-            body: JSON.stringify({ note: noteText, page: pageNum })
-        });
 
-        if (response.ok) {
-            const notesList = document.getElementById('notes-list');
-            const newNote = `
-                <div class="list-group-item px-0">
-                    <span class="badge bg-info mb-1">Page ${pageNum}</span>
-                    <p class="small mb-1">${escapeHTML(noteText)}</p>
-                </div>`;
-            notesList.insertAdjacentHTML('afterbegin', newNote);
-            noteArea.value = "";
+        const deleteUrl = getDeleteUrl(type, id);
+
+        console.log('Deleting:', type, id, deleteUrl);
+
+        const response = await post(deleteUrl, {});
+
+        if (!response.success) {
+            throw new Error(response.error || 'Deletion failed.');
         }
-    } catch (e) {
-        alert("Error saving note.");
-    } finally {
-        btn.disabled = false;
+
+        // Remove deleted highlight from memory.
+        if (type === 'highlight') {
+            highlights = highlights.filter(
+                h => Number(h.id) !== id
+            );
+        }
+
+        // Remove deleted drawing from memory and canvas.
+        if (type === 'drawing') {
+
+            annotations = annotations.filter(
+                a => Number(a.id) !== id
+            );
+
+            pageStrokes = pageStrokes.filter(
+                s => Number(s.id) !== id
+            );
+
+            undo = undo.filter(
+                s => Number(s.id) !== id
+            );
+
+            redo = redo.filter(
+                s => Number(s.id) !== id
+            );
+
+            redraw();
+            update();
+        }
+
+        // Remove item from sidebar.
+        article.remove();
+
+        // Add empty-state message when necessary.
+        if (!parentList.querySelector('.sr-item')) {
+
+            const empty = document.createElement('div');
+
+            empty.className = 'sr-empty';
+
+            const messages = {
+                note: 'No notes yet. Add your first study note below.',
+                highlight: 'Select text, then choose Highlight to save it.',
+                bookmark: 'Your saved pages will appear here.',
+                drawing: 'Pencil marks will appear here.'
+            };
+
+            empty.textContent = messages[type];
+
+            parentList.appendChild(empty);
+        }
+
+        status(type.charAt(0).toUpperCase() + type.slice(1) +
+            ' deleted successfully.');
+
+    } catch (error) {
+
+        console.error('Delete error:', error);
+
+        button.disabled = false;
+        button.innerHTML = originalText;
+
+        status('Delete failed: ' + error.message);
+    }
+
+});
+
+
+const status=s=>$('reader-status').textContent=s;
+if(!pdfjs){$('reader-error').textContent='PDF.js failed to load. Check your internet connection.';$('reader-error').classList.remove('sr-hidden');return;}
+pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js';
+const canvas=$('pdf-canvas'),ctx=canvas.getContext('2d'),overlay=$('annotation-canvas'),octx=overlay.getContext('2d'),layer=$('text-layer'),wrapper=$('pdf-wrapper');
+let pdf=null,page=Number($('page-input').value)||1,scale=1,fit=true,busy=false,pending=null,tool='select',color='#FFE66D',drawing=false,stroke=null,progressTimer;
+let highlights=[],annotations=[],pageStrokes=[],undo=[],redo=[];
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+async function post(url,data){const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify(data)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed ('+r.status+')');return d;}
+
+document.addEventListener('click', async function(e) {
+    const button = e.target.closest('[data-delete-type]');
+
+    if (!button) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const type = button.dataset.deleteType;
+    const id = Number(button.dataset.deleteId);
+
+    console.log('DELETE BUTTON CLICKED:', type, id);
+
+    if (!['note', 'highlight', 'bookmark', 'drawing'].includes(type)) {
+        console.error('Invalid item type:', type);
+        return;
+    }
+
+    if (!Number.isInteger(id) || id <= 0) {
+        console.error('Invalid item ID:', id);
+        return;
+    }
+
+    if (!confirm('Are you sure you want to delete this ' + type + '?')) {
+        return;
+    }
+
+    const deleteUrl = getDeleteUrl(type, id);
+
+    console.log('DELETE URL:', deleteUrl);
+
+    button.disabled = true;
+
+    try {
+        // Send request to Django FIRST
+        const response = await post(deleteUrl, {});
+
+        console.log('DELETE RESPONSE:', response);
+
+        if (!response.success) {
+            throw new Error(response.error || 'Deletion failed.');
+        }
+
+        // Only remove from UI after successful database deletion
+        const article = button.closest('.sr-item');
+
+        if (article) {
+            const parentList = article.parentElement;
+            article.remove();
+
+            if (parentList && !parentList.querySelector('.sr-item')) {
+                const empty = document.createElement('div');
+                empty.className = 'sr-empty';
+
+                const messages = {
+                    note: 'No notes yet. Add your first study note below.',
+                    highlight: 'Select text, then choose Highlight to save it.',
+                    bookmark: 'Your saved pages will appear here.',
+                    drawing: 'Pencil marks will appear here.'
+                };
+
+                empty.textContent = messages[type];
+                parentList.appendChild(empty);
+            }
+        }
+
+        // Update in-memory data
+        if (type === 'highlight') {
+            highlights = highlights.filter(
+                item => Number(item.id) !== id
+            );
+        }
+
+        if (type === 'drawing') {
+            annotations = annotations.filter(
+                item => Number(item.id) !== id
+            );
+
+            pageStrokes = pageStrokes.filter(
+                item => Number(item.id) !== id
+            );
+
+            undo = undo.filter(item => Number(item.id) !== id);
+            redo = redo.filter(item => Number(item.id) !== id);
+
+            redraw();
+            update();
+        }
+
+        status(type.charAt(0).toUpperCase() + type.slice(1) +
+            ' deleted successfully.');
+
+    } catch (error) {
+        console.error('DELETE ERROR:', error);
+
+        button.disabled = false;
+
+        status('Delete failed: ' + error.message);
+        alert('Could not delete item: ' + error.message);
     }
 });
 
-// ==============================
-// 📄 CONTROLS
-// ==============================
-document.getElementById('prev-page')?.addEventListener('click', () => {
-    if (pageNum > 1) { pageNum--; queueRenderPage(pageNum); }
+function update(){ $('page-input').value=page;$('note-page').textContent=page;$('prev-page').disabled=!pdf||page<=1;$('next-page').disabled=!pdf||page>=pdf.numPages;$('page-input').max=pdf?pdf.numPages:1;let pct=pdf?Math.round(page/pdf.numPages*100):0;$('progress-fill').style.width=pct+'%';$('progress-text').textContent=pct+'% through book';$('zoom-label').textContent=Math.round(scale*100)+'%';$('undo-btn').disabled=!undo.length;$('redo-btn').disabled=!redo.length; }
+function point(e){let r=overlay.getBoundingClientRect();return{x:clamp((e.clientX-r.left)/r.width,0,1),y:clamp((e.clientY-r.top)/r.height,0,1)};}
+function draw(points, c, w, eraser = false) {
+    if (!points?.length) return;
+
+    const width = overlay.clientWidth;
+    const height = overlay.clientHeight;
+
+    octx.save();
+    octx.lineCap = 'round';
+    octx.lineJoin = 'round';
+    octx.globalCompositeOperation = eraser
+        ? 'destination-out'
+        : 'source-over';
+
+    octx.strokeStyle = eraser ? 'rgba(0,0,0,1)' : c;
+    octx.lineWidth = eraser ? Math.max(w, 18) : w;
+
+    octx.beginPath();
+    octx.moveTo(
+        points[0].x * width,
+        points[0].y * height
+    );
+
+    points.slice(1).forEach(p => {
+        octx.lineTo(p.x * width, p.y * height);
+    });
+
+    if (points.length === 1) {
+        octx.lineTo(
+            points[0].x * width + 0.1,
+            points[0].y * height + 0.1
+        );
+    }
+
+    octx.stroke();
+    octx.restore();
+}
+
+function drawHighlight(h) {
+    const rects = h.position_data?.rects;
+
+    if (!Array.isArray(rects)) return;
+
+    const width = overlay.clientWidth;
+    const height = overlay.clientHeight;
+
+    octx.save();
+    octx.globalCompositeOperation = 'multiply';
+    octx.globalAlpha = 0.45;
+    octx.fillStyle = h.color || '#FFE66D';
+
+    rects.forEach(r => {
+        octx.fillRect(
+            r.x * width,
+            r.y * height,
+            r.w * width,
+            r.h * height
+        );
+    });
+
+    octx.restore();
+}
+
+function redraw(){octx.clearRect(0,0,overlay.width,overlay.height);pageStrokes.forEach(s=>draw(s.points,s.color,s.width,s.tool==='eraser'));highlights.filter(h=>Number(h.page)===page).forEach(drawHighlight);}
+async function render(n){if(!pdf)return;if(busy){pending=n;return;}busy=true;status('Rendering page '+n+'…');try{let p=await pdf.getPage(n);if(fit)scale=clamp(($('viewer-container').clientWidth-42)/p.getViewport({scale:1}).width,.5,2.5);let vp=p.getViewport({scale}),dpr=window.devicePixelRatio||1;canvas.width=vp.width*dpr;canvas.height=vp.height*dpr;canvas.style.width=vp.width+'px';canvas.style.height=vp.height+'px';wrapper.style.width=vp.width+'px';wrapper.style.height=vp.height+'px';layer.replaceChildren();layer.style.width=vp.width+'px';layer.style.height=vp.height+'px';overlay.width=vp.width*dpr;overlay.height=vp.height*dpr;overlay.style.width=vp.width+'px';overlay.style.height=vp.height+'px';octx.setTransform(dpr,0,0,dpr,0,0);await p.render({canvasContext:ctx,viewport:vp,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;if(pending===null){let tc=await p.getTextContent();if(pending===null)await pdfjs.renderTextLayer({textContentSource:tc,container:layer,viewport:vp,textDivs:[]}).promise;}pageStrokes=annotations.filter(a=>Number(a.page)===page).map(a=>{let d=a.position_data||{};return{points:d.points||[],color:a.color||'#FF0000',width:d.width||2.5,tool:d.tool||'pencil',id:a.id};}).filter(s=>s.points.length);redraw();status('Page '+n+' of '+pdf.numPages);}catch(e){console.error(e);status('Could not render this page.');}finally{busy=false;update();if(pending!==null){let x=pending;pending=null;render(x);}}}
+function goto(n){if(!pdf||!Number.isFinite(Number(n)))return;page=clamp(Math.trunc(Number(n)),1,pdf.numPages);update();render(page);$('viewer-container').scrollTop=0;clearTimeout(progressTimer);progressTimer=setTimeout(()=>post(api.progress,{page}).catch(console.warn),600);}
+$('prev-page').onclick=()=>goto(page-1);$('next-page').onclick=()=>goto(page+1);$('page-input').onchange=e=>goto(e.target.value);
+function zoom(d){fit=false;scale=clamp(Math.round((scale+d)*100)/100,.5,3);render(page);}
+$('zoom-in').onclick=()=>zoom(.2);$('zoom-out').onclick=()=>zoom(-.2);$('fit-width').onclick=()=>{fit=true;render(page);};$('reset-zoom').onclick=()=>{fit=false;scale=1;render(page);};
+$('fullscreen-btn').onclick=async()=>{try{document.fullscreenElement?await document.exitFullscreen():await $('reader-card').requestFullscreen();}catch(e){status('Fullscreen unavailable in this browser.');}};
+document.addEventListener('fullscreenchange',()=>{if(pdf&&fit)render(page);});
+let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(pdf&&fit)render(page);},180);});
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,button'))return;if(e.key==='ArrowLeft')goto(page-1);if(e.key==='ArrowRight')goto(page+1);});
+document.querySelectorAll('.sr-tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.sr-tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.sr-panel').forEach(x=>x.classList.toggle('active',x.id===b.dataset.panel));});
+document.addEventListener('click',e=>{let b=e.target.closest('[data-goto-page]');if(b)goto(Number(b.dataset.gotoPage));});
+function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));overlay.classList.toggle('drawing',t==='pencil'||t==='eraser');layer.style.pointerEvents=t==='pencil'||t==='eraser'?'none':'auto';status(t==='highlight'?'Select text in the PDF to save a highlight.':t==='pencil'?'Draw on the page.':t==='eraser'?'Draw over marks to erase.':'Selection mode');}
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+document.querySelectorAll('.sr-color').forEach(b=>b.onclick=()=>{color=b.dataset.color;document.querySelectorAll('.sr-color').forEach(x=>x.classList.toggle('active',x===b));});
+function addItem(listId, cls, title, body, pageNo, itemType, itemId) {
+    const list = $(listId);
+
+    list.querySelector('.sr-empty')?.remove();
+
+    const article = document.createElement('article');
+
+    article.className = 'sr-item ' + cls;
+    article.dataset.itemType = itemType;
+    article.dataset.itemId = itemId;
+
+    const meta = document.createElement('div');
+    meta.className = 'sr-meta';
+
+    const label = document.createElement('span');
+    label.textContent = title + ' · Page ' + pageNo;
+
+    const date = document.createElement('span');
+    date.textContent = 'Just now';
+
+    meta.append(label, date);
+    article.append(meta);
+
+    if (body) {
+        const p = document.createElement('p');
+        p.textContent = body;
+        article.append(p);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'sr-actions';
+
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'sr-mini';
+    openBtn.dataset.gotoPage = pageNo;
+    openBtn.innerHTML = '<i class="bi bi-book-open"></i> Open page';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'sr-mini text-danger ms-1';
+    deleteBtn.dataset.deleteType = itemType;
+    deleteBtn.dataset.deleteId = itemId;
+    deleteBtn.innerHTML = '<i class="bi bi-trash"></i> Delete';
+
+    actions.append(openBtn, deleteBtn);
+    article.append(actions);
+
+    list.prepend(article);
+
+    return article;
+}
+
+async function saveHighlight() {
+    const selection = window.getSelection();
+
+    if (!selection || !selection.rangeCount) return;
+
+    const text = selection.toString().trim();
+
+    if (!text) {
+        status('Select the words you want to highlight.');
+        return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    if (
+        !layer.contains(range.startContainer) ||
+        !layer.contains(range.endContainer)
+    ) {
+        status('Please select text inside the PDF.');
+        return;
+    }
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+
+    const rects = Array.from(range.getClientRects())
+        .map(r => {
+            const left = Math.max(r.left, wrapperRect.left);
+            const top = Math.max(r.top, wrapperRect.top);
+            const right = Math.min(r.right, wrapperRect.right);
+            const bottom = Math.min(r.bottom, wrapperRect.bottom);
+
+            return {
+                x: (left - wrapperRect.left) / wrapperRect.width,
+                y: (top - wrapperRect.top) / wrapperRect.height,
+                w: (right - left) / wrapperRect.width,
+                h: (bottom - top) / wrapperRect.height
+            };
+        })
+        .filter(r => r.w > 0 && r.h > 0);
+
+    if (!rects.length) {
+        status('Could not locate the selected words.');
+        return;
+    }
+
+    const highlight = {
+        id: 'temporary-' + Date.now(),
+        text: text,
+        page: page,
+        color: color,
+        position_data: { rects: rects }
+    };
+
+    // 1. Display immediately without waiting for the server.
+    highlights.push(highlight);
+    redraw();
+
+    const article = addItem(
+        'highlights-list',
+        'sr-highlight',
+        'Highlight',
+        text,
+        page,
+        'highlight',
+        highlight.id
+    );
+
+    selection.removeAllRanges();
+    setTool('select');
+
+    status('Saving highlight...');
+
+    // 2. Save in the background.
+    try {
+        const response = await post(api.highlight, {
+            text: text,
+            page: highlight.page,
+            color: highlight.color,
+            position_data: highlight.position_data
+        });
+
+        // 3. Replace temporary ID with the database ID.
+        highlight.id = response.id;
+
+        article.dataset.itemId = response.id;
+        article.querySelector('[data-delete-id]').dataset.deleteId =
+            response.id;
+
+        status('Highlight saved successfully.');
+
+    } catch (error) {
+        // 4. Remove the temporary highlight if saving fails.
+        highlights = highlights.filter(h => h !== highlight);
+        article.remove();
+
+        redraw();
+
+        status('Highlight could not be saved: ' + error.message);
+        console.error(error);
+    }
+}
+
+
+layer.addEventListener('mouseup',()=>{if(tool==='highlight')setTimeout(saveHighlight,30);});
+function pointerDown(e){if(!['pencil','eraser'].includes(tool))return;e.preventDefault();overlay.setPointerCapture(e.pointerId);drawing=true;stroke={points:[point(e)],color,width:tool==='eraser'?18:2.5,tool};draw(stroke.points,color,stroke.width,tool==='eraser');}
+function pointerMove(e){if(!drawing||!stroke)return;stroke.points.push(point(e));draw(stroke.points.slice(-2),stroke.color,stroke.width,stroke.tool==='eraser');}
+async function pointerUp(){if(!drawing||!stroke)return;drawing=false;let s=stroke;stroke=null;try{let d=await post(api.annotation,{page,annotation_type:'pencil',color:s.color,position_data:{points:s.points,width:s.width,tool:s.tool}});s.id=d.id;pageStrokes.push(s);annotations.push({...s,page,position_data:{points:s.points,width:s.width,tool:s.tool}});undo.push(s);redo=[];update();addItem(
+    'drawings-list',
+    'sr-drawing',
+    s.tool === 'eraser' ? 'Erasure' : 'Pencil mark',
+    '',
+    page,
+    'drawing',
+    d.id
+);status('Drawing saved.');}catch(e){redraw();status('Drawing save failed: '+e.message);}}
+overlay.addEventListener('pointerdown',pointerDown);overlay.addEventListener('pointermove',pointerMove);overlay.addEventListener('pointerup',pointerUp);overlay.addEventListener('pointercancel',pointerUp);
+$('undo-btn').onclick=()=>{if(!undo.length)return;let s=undo.pop();redo.push(s);let i=pageStrokes.lastIndexOf(s);if(i>=0)pageStrokes.splice(i,1);redraw();update();status('Undo applied to this session.');};
+$('redo-btn').onclick=()=>{if(!redo.length)return;let s=redo.pop();pageStrokes.push(s);redraw();update();status('Redo applied to this session.');};
+$('bookmark-btn').onclick=async()=>{let b=$('bookmark-btn');b.disabled=true;try{let d=await post(api.bookmark,{page});if(d.status==='already_saved'){status('This page is already bookmarked.');return;}addItem(
+    'bookmarks-list',
+    'sr-bookmark',
+    'Bookmark',
+    '',
+    page,
+    'bookmark',
+    d.id
+);status('Page bookmarked.');}catch(e){status('Bookmark failed: '+e.message);}finally{b.disabled=false;}};
+$('note-form').onsubmit=async e=>{e.preventDefault();let text=$('note-text').value.trim();if(!text)return;let b=$('save-note-btn'),p=page;b.disabled=true;$('note-feedback').textContent='Saving…';try{const response = await post(api.note, {
+    note: text,
+    page: p
 });
 
-document.getElementById('next-page')?.addEventListener('click', () => {
-    if (pdfDoc && pageNum < pdfDoc.numPages) { pageNum++; queueRenderPage(pageNum); }
-});
-
-document.getElementById('zoom-in')?.addEventListener('click', () => {
-    scale += 0.2; queueRenderPage(pageNum);
-});
-
-document.getElementById('zoom-out')?.addEventListener('click', () => {
-    if (scale > 0.6) { scale -= 0.2; queueRenderPage(pageNum); }
-});
-
-aiInput.addEventListener("keypress", (e) => { if (e.key === "Enter") aiBtn.click(); });
-
-// ==============================
-// 🚀 INIT
-// ==============================
-pdfjsLib.getDocument(url).promise.then(pdfDoc_ => {
-    pdfDoc = pdfDoc_;
-    document.getElementById('page-count').textContent = pdfDoc.numPages;
-    renderPage(pageNum);
-}).catch(err => {
-    console.error("PDF Load Error: ", err);
-    document.getElementById('viewer-container').innerHTML = `<div class="alert alert-danger m-5">Failed to load PDF file.</div>`;
-});
+addItem(
+    'notes-list',
+    '',
+    'Note',
+    text,
+    p,
+    'note',
+    response.id
+);$('note-text').value='';$('note-feedback').textContent='Note saved.';$('note-feedback').style.color='#15803d';}catch(err){$('note-feedback').textContent='Could not save note: '+err.message;$('note-feedback').style.color='#b91c1c';}finally{b.disabled=false;}};
+// JSONField values are serialized by the Django view to valid JSON before embedding.
+highlights = JSON.parse($('saved-highlights-data').textContent || '[]');
+annotations = JSON.parse($('saved-annotations-data').textContent || '[]');
+pdfjs.getDocument(pdfUrl).promise.then(doc=>{pdf=doc;$('page-count').textContent=doc.numPages;page=clamp(page,1,doc.numPages);update();render(page);}).catch(e=>{console.error(e);$('reader-error').textContent='Failed to load PDF. Check the file and access permissions.';$('reader-error').classList.remove('sr-hidden');status('PDF failed to load.');});
+update();
+})();
 </script>
 {% endblock %}
