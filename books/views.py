@@ -184,7 +184,7 @@ from .models import Book, BookNote, Highlight, Bookmark, ReadingProgress, BookAn
 #    return JsonResponse({"error": "Invalid request"}, status=400)
 
 
-
+from django.db import transaction
 
 def get_json_data(request):
     """Safely read JSON request data."""
@@ -208,13 +208,11 @@ def valid_page(value):
 from django.views.decorators.http import require_POST
 
 
-
 @login_required
 @require_POST
 def delete_study_item(request, pk, item_type, item_id):
     book = get_object_or_404(Book, pk=pk)
 
-    # Only allow deletion of the current user's records
     models_map = {
         'note': BookNote,
         'highlight': Highlight,
@@ -233,24 +231,40 @@ def delete_study_item(request, pk, item_type, item_id):
         }, status=400)
 
     try:
-        with transaction.atomic():
-            item = get_object_or_404(
-                model,
-                pk=item_id,
-                book=book,
-                user=request.user
-            )
+        item = get_object_or_404(
+            model,
+            pk=item_id,
+            book=book,
+            user=request.user
+        )
 
-            item.delete()
+        deleted_id = item.pk
+
+        # Delete the database record
+        item.delete()
+
+        print(
+            f"SUCCESS: Deleted {item_type} "
+            f"ID={deleted_id}, Book={book.id}, User={request.user.id}"
+        )
 
         return JsonResponse({
             'success': True,
             'message': f'{item_type.capitalize()} deleted successfully.',
             'item_type': item_type,
-            'item_id': item_id,
+            'item_id': deleted_id,
         })
 
+    except Http404:
+        return JsonResponse({
+            'success': False,
+            'error': f'{item_type.capitalize()} not found.'
+        }, status=404)
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+
         return JsonResponse({
             'success': False,
             'error': str(e)

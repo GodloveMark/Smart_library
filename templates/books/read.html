@@ -289,534 +289,1401 @@
 {{ highlights_json|json_script:"saved-highlights-data" }}
 {{ annotations_json|json_script:"saved-annotations-data" }}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
+
 <script>
 (() => {
-'use strict';
-const $=id=>document.getElementById(id), pdfUrl=JSON.parse($('book-pdf-url').textContent);
-const pdfjs=window['pdfjs-dist/build/pdf'];
-const csrf=document.querySelector('#note-form [name=csrfmiddlewaretoken]').value;
-const api = {
-    note: "{% url 'add_note' book.id %}",
-    highlight: "{% url 'save_highlight' book.id %}",
-    bookmark: "{% url 'bookmark_page' book.id %}",
-    progress: "{% url 'save_progress' book.id %}",
-    annotation: "{% url 'save_annotation' book.id %}",
-    deleteItem: "{% url 'delete_study_item' book.id 'note' 0 %}"
-};
+    'use strict';
 
+    // ==========================================
+    // 1. INITIAL SETUP
+    // ==========================================
 
-// ======================================
-// DELETE NOTES, HIGHLIGHTS, BOOKMARKS
-// AND DRAWINGS
-// ======================================
+    const $ = id => document.getElementById(id);
 
-document.addEventListener('click', async function(e) {
-
-    const button = e.target.closest('[data-delete-type]');
-
-    if (!button) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const type = button.dataset.deleteType;
-    const id = Number(button.dataset.deleteId);
-
-    if (!['note', 'highlight', 'bookmark', 'drawing', 'progress', 'history'].includes(type)) {
-        status('Invalid item type.');
-        return;
-    }
-
-    if (!Number.isInteger(id) || id <= 0) {
-        status('Invalid item ID. Please refresh the page and try again.');
-        return;
-    }
-
-    const confirmed = confirm(
-        'Are you sure you want to delete this ' + type + '?'
+    const pdfUrl = JSON.parse(
+        $('book-pdf-url').textContent
     );
 
-    if (!confirmed) return;
+    const pdfjs = window['pdfjs-dist/build/pdf'];
 
-    const article = button.closest('.sr-item');
-    const parentList = article?.parentElement;
+    const csrf = document.querySelector(
+        '#note-form [name=csrfmiddlewaretoken]'
+    ).value;
 
-    if (!article || !parentList) return;
-
-    const originalText = button.innerHTML;
-
-    button.disabled = true;
-    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Deleting...';
-
-    try {
-
-        const deleteUrl = getDeleteUrl(type, id);
-
-        console.log('Deleting:', type, id, deleteUrl);
-
-        const response = await post(deleteUrl, {});
-
-        if (!response.success) {
-            throw new Error(response.error || 'Deletion failed.');
-        }
-
-        // Remove deleted highlight from memory.
-        if (type === 'highlight') {
-            highlights = highlights.filter(
-                h => Number(h.id) !== id
-            );
-        }
-
-        // Remove deleted drawing from memory and canvas.
-        if (type === 'drawing') {
-
-            annotations = annotations.filter(
-                a => Number(a.id) !== id
-            );
-
-            pageStrokes = pageStrokes.filter(
-                s => Number(s.id) !== id
-            );
-
-            undo = undo.filter(
-                s => Number(s.id) !== id
-            );
-
-            redo = redo.filter(
-                s => Number(s.id) !== id
-            );
-
-            redraw();
-            update();
-        }
-
-        // Remove item from sidebar.
-        article.remove();
-
-        // Add empty-state message when necessary.
-        if (!parentList.querySelector('.sr-item')) {
-
-            const empty = document.createElement('div');
-
-            empty.className = 'sr-empty';
-
-            const messages = {
-                note: 'No notes yet. Add your first study note below.',
-                highlight: 'Select text, then choose Highlight to save it.',
-                bookmark: 'Your saved pages will appear here.',
-                drawing: 'Pencil marks will appear here.'
-            };
-
-            empty.textContent = messages[type];
-
-            parentList.appendChild(empty);
-        }
-
-        status(type.charAt(0).toUpperCase() + type.slice(1) +
-            ' deleted successfully.');
-
-    } catch (error) {
-
-        console.error('Delete error:', error);
-
-        button.disabled = false;
-        button.innerHTML = originalText;
-
-        status('Delete failed: ' + error.message);
-    }
-
-});
-
-
-const status=s=>$('reader-status').textContent=s;
-if(!pdfjs){$('reader-error').textContent='PDF.js failed to load. Check your internet connection.';$('reader-error').classList.remove('sr-hidden');return;}
-pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js';
-const canvas=$('pdf-canvas'),ctx=canvas.getContext('2d'),overlay=$('annotation-canvas'),octx=overlay.getContext('2d'),layer=$('text-layer'),wrapper=$('pdf-wrapper');
-let pdf=null,page=Number($('page-input').value)||1,scale=1,fit=true,busy=false,pending=null,tool='select',color='#FFE66D',drawing=false,stroke=null,progressTimer;
-let highlights=[],annotations=[],pageStrokes=[],undo=[],redo=[];
-const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-async function post(url,data){const r=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':csrf},body:JSON.stringify(data)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed ('+r.status+')');return d;}
-
-document.addEventListener('click', async function(e) {
-    const button = e.target.closest('[data-delete-type]');
-
-    if (!button) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const type = button.dataset.deleteType;
-    const id = Number(button.dataset.deleteId);
-
-    console.log('DELETE BUTTON CLICKED:', type, id);
-
-    if (!['note', 'highlight', 'bookmark', 'drawing'].includes(type)) {
-        console.error('Invalid item type:', type);
-        return;
-    }
-
-    if (!Number.isInteger(id) || id <= 0) {
-        console.error('Invalid item ID:', id);
-        return;
-    }
-
-    if (!confirm('Are you sure you want to delete this ' + type + '?')) {
-        return;
-    }
-
-    const deleteUrl = getDeleteUrl(type, id);
-
-    console.log('DELETE URL:', deleteUrl);
-
-    button.disabled = true;
-
-    try {
-        // Send request to Django FIRST
-        const response = await post(deleteUrl, {});
-
-        console.log('DELETE RESPONSE:', response);
-
-        if (!response.success) {
-            throw new Error(response.error || 'Deletion failed.');
-        }
-
-        // Only remove from UI after successful database deletion
-        const article = button.closest('.sr-item');
-
-        if (article) {
-            const parentList = article.parentElement;
-            article.remove();
-
-            if (parentList && !parentList.querySelector('.sr-item')) {
-                const empty = document.createElement('div');
-                empty.className = 'sr-empty';
-
-                const messages = {
-                    note: 'No notes yet. Add your first study note below.',
-                    highlight: 'Select text, then choose Highlight to save it.',
-                    bookmark: 'Your saved pages will appear here.',
-                    drawing: 'Pencil marks will appear here.'
-                };
-
-                empty.textContent = messages[type];
-                parentList.appendChild(empty);
-            }
-        }
-
-        // Update in-memory data
-        if (type === 'highlight') {
-            highlights = highlights.filter(
-                item => Number(item.id) !== id
-            );
-        }
-
-        if (type === 'drawing') {
-            annotations = annotations.filter(
-                item => Number(item.id) !== id
-            );
-
-            pageStrokes = pageStrokes.filter(
-                item => Number(item.id) !== id
-            );
-
-            undo = undo.filter(item => Number(item.id) !== id);
-            redo = redo.filter(item => Number(item.id) !== id);
-
-            redraw();
-            update();
-        }
-
-        status(type.charAt(0).toUpperCase() + type.slice(1) +
-            ' deleted successfully.');
-
-    } catch (error) {
-        console.error('DELETE ERROR:', error);
-
-        button.disabled = false;
-
-        status('Delete failed: ' + error.message);
-        alert('Could not delete item: ' + error.message);
-    }
-});
-
-function update(){ $('page-input').value=page;$('note-page').textContent=page;$('prev-page').disabled=!pdf||page<=1;$('next-page').disabled=!pdf||page>=pdf.numPages;$('page-input').max=pdf?pdf.numPages:1;let pct=pdf?Math.round(page/pdf.numPages*100):0;$('progress-fill').style.width=pct+'%';$('progress-text').textContent=pct+'% through book';$('zoom-label').textContent=Math.round(scale*100)+'%';$('undo-btn').disabled=!undo.length;$('redo-btn').disabled=!redo.length; }
-function point(e){let r=overlay.getBoundingClientRect();return{x:clamp((e.clientX-r.left)/r.width,0,1),y:clamp((e.clientY-r.top)/r.height,0,1)};}
-function draw(points, c, w, eraser = false) {
-    if (!points?.length) return;
-
-    const width = overlay.clientWidth;
-    const height = overlay.clientHeight;
-
-    octx.save();
-    octx.lineCap = 'round';
-    octx.lineJoin = 'round';
-    octx.globalCompositeOperation = eraser
-        ? 'destination-out'
-        : 'source-over';
-
-    octx.strokeStyle = eraser ? 'rgba(0,0,0,1)' : c;
-    octx.lineWidth = eraser ? Math.max(w, 18) : w;
-
-    octx.beginPath();
-    octx.moveTo(
-        points[0].x * width,
-        points[0].y * height
-    );
-
-    points.slice(1).forEach(p => {
-        octx.lineTo(p.x * width, p.y * height);
-    });
-
-    if (points.length === 1) {
-        octx.lineTo(
-            points[0].x * width + 0.1,
-            points[0].y * height + 0.1
-        );
-    }
-
-    octx.stroke();
-    octx.restore();
-}
-
-function drawHighlight(h) {
-    const rects = h.position_data?.rects;
-
-    if (!Array.isArray(rects)) return;
-
-    const width = overlay.clientWidth;
-    const height = overlay.clientHeight;
-
-    octx.save();
-    octx.globalCompositeOperation = 'multiply';
-    octx.globalAlpha = 0.45;
-    octx.fillStyle = h.color || '#FFE66D';
-
-    rects.forEach(r => {
-        octx.fillRect(
-            r.x * width,
-            r.y * height,
-            r.w * width,
-            r.h * height
-        );
-    });
-
-    octx.restore();
-}
-
-function redraw(){octx.clearRect(0,0,overlay.width,overlay.height);pageStrokes.forEach(s=>draw(s.points,s.color,s.width,s.tool==='eraser'));highlights.filter(h=>Number(h.page)===page).forEach(drawHighlight);}
-async function render(n){if(!pdf)return;if(busy){pending=n;return;}busy=true;status('Rendering page '+n+'…');try{let p=await pdf.getPage(n);if(fit)scale=clamp(($('viewer-container').clientWidth-42)/p.getViewport({scale:1}).width,.5,2.5);let vp=p.getViewport({scale}),dpr=window.devicePixelRatio||1;canvas.width=vp.width*dpr;canvas.height=vp.height*dpr;canvas.style.width=vp.width+'px';canvas.style.height=vp.height+'px';wrapper.style.width=vp.width+'px';wrapper.style.height=vp.height+'px';layer.replaceChildren();layer.style.width=vp.width+'px';layer.style.height=vp.height+'px';overlay.width=vp.width*dpr;overlay.height=vp.height*dpr;overlay.style.width=vp.width+'px';overlay.style.height=vp.height+'px';octx.setTransform(dpr,0,0,dpr,0,0);await p.render({canvasContext:ctx,viewport:vp,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null}).promise;if(pending===null){let tc=await p.getTextContent();if(pending===null)await pdfjs.renderTextLayer({textContentSource:tc,container:layer,viewport:vp,textDivs:[]}).promise;}pageStrokes=annotations.filter(a=>Number(a.page)===page).map(a=>{let d=a.position_data||{};return{points:d.points||[],color:a.color||'#FF0000',width:d.width||2.5,tool:d.tool||'pencil',id:a.id};}).filter(s=>s.points.length);redraw();status('Page '+n+' of '+pdf.numPages);}catch(e){console.error(e);status('Could not render this page.');}finally{busy=false;update();if(pending!==null){let x=pending;pending=null;render(x);}}}
-function goto(n){if(!pdf||!Number.isFinite(Number(n)))return;page=clamp(Math.trunc(Number(n)),1,pdf.numPages);update();render(page);$('viewer-container').scrollTop=0;clearTimeout(progressTimer);progressTimer=setTimeout(()=>post(api.progress,{page}).catch(console.warn),600);}
-$('prev-page').onclick=()=>goto(page-1);$('next-page').onclick=()=>goto(page+1);$('page-input').onchange=e=>goto(e.target.value);
-function zoom(d){fit=false;scale=clamp(Math.round((scale+d)*100)/100,.5,3);render(page);}
-$('zoom-in').onclick=()=>zoom(.2);$('zoom-out').onclick=()=>zoom(-.2);$('fit-width').onclick=()=>{fit=true;render(page);};$('reset-zoom').onclick=()=>{fit=false;scale=1;render(page);};
-$('fullscreen-btn').onclick=async()=>{try{document.fullscreenElement?await document.exitFullscreen():await $('reader-card').requestFullscreen();}catch(e){status('Fullscreen unavailable in this browser.');}};
-document.addEventListener('fullscreenchange',()=>{if(pdf&&fit)render(page);});
-let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(pdf&&fit)render(page);},180);});
-document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,button'))return;if(e.key==='ArrowLeft')goto(page-1);if(e.key==='ArrowRight')goto(page+1);});
-document.querySelectorAll('.sr-tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.sr-tab').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.sr-panel').forEach(x=>x.classList.toggle('active',x.id===b.dataset.panel));});
-document.addEventListener('click',e=>{let b=e.target.closest('[data-goto-page]');if(b)goto(Number(b.dataset.gotoPage));});
-function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));overlay.classList.toggle('drawing',t==='pencil'||t==='eraser');layer.style.pointerEvents=t==='pencil'||t==='eraser'?'none':'auto';status(t==='highlight'?'Select text in the PDF to save a highlight.':t==='pencil'?'Draw on the page.':t==='eraser'?'Draw over marks to erase.':'Selection mode');}
-document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
-document.querySelectorAll('.sr-color').forEach(b=>b.onclick=()=>{color=b.dataset.color;document.querySelectorAll('.sr-color').forEach(x=>x.classList.toggle('active',x===b));});
-function addItem(listId, cls, title, body, pageNo, itemType, itemId) {
-    const list = $(listId);
-
-    list.querySelector('.sr-empty')?.remove();
-
-    const article = document.createElement('article');
-
-    article.className = 'sr-item ' + cls;
-    article.dataset.itemType = itemType;
-    article.dataset.itemId = itemId;
-
-    const meta = document.createElement('div');
-    meta.className = 'sr-meta';
-
-    const label = document.createElement('span');
-    label.textContent = title + ' · Page ' + pageNo;
-
-    const date = document.createElement('span');
-    date.textContent = 'Just now';
-
-    meta.append(label, date);
-    article.append(meta);
-
-    if (body) {
-        const p = document.createElement('p');
-        p.textContent = body;
-        article.append(p);
-    }
-
-    const actions = document.createElement('div');
-    actions.className = 'sr-actions';
-
-    const openBtn = document.createElement('button');
-    openBtn.type = 'button';
-    openBtn.className = 'sr-mini';
-    openBtn.dataset.gotoPage = pageNo;
-    openBtn.innerHTML = '<i class="bi bi-book-open"></i> Open page';
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'sr-mini text-danger ms-1';
-    deleteBtn.dataset.deleteType = itemType;
-    deleteBtn.dataset.deleteId = itemId;
-    deleteBtn.innerHTML = '<i class="bi bi-trash"></i> Delete';
-
-    actions.append(openBtn, deleteBtn);
-    article.append(actions);
-
-    list.prepend(article);
-
-    return article;
-}
-
-async function saveHighlight() {
-    const selection = window.getSelection();
-
-    if (!selection || !selection.rangeCount) return;
-
-    const text = selection.toString().trim();
-
-    if (!text) {
-        status('Select the words you want to highlight.');
-        return;
-    }
-
-    const range = selection.getRangeAt(0);
-
-    if (
-        !layer.contains(range.startContainer) ||
-        !layer.contains(range.endContainer)
-    ) {
-        status('Please select text inside the PDF.');
-        return;
-    }
-
-    const wrapperRect = wrapper.getBoundingClientRect();
-
-    const rects = Array.from(range.getClientRects())
-        .map(r => {
-            const left = Math.max(r.left, wrapperRect.left);
-            const top = Math.max(r.top, wrapperRect.top);
-            const right = Math.min(r.right, wrapperRect.right);
-            const bottom = Math.min(r.bottom, wrapperRect.bottom);
-
-            return {
-                x: (left - wrapperRect.left) / wrapperRect.width,
-                y: (top - wrapperRect.top) / wrapperRect.height,
-                w: (right - left) / wrapperRect.width,
-                h: (bottom - top) / wrapperRect.height
-            };
-        })
-        .filter(r => r.w > 0 && r.h > 0);
-
-    if (!rects.length) {
-        status('Could not locate the selected words.');
-        return;
-    }
-
-    const highlight = {
-        id: 'temporary-' + Date.now(),
-        text: text,
-        page: page,
-        color: color,
-        position_data: { rects: rects }
+    const status = message => {
+        $('reader-status').textContent = message;
     };
 
-    // 1. Display immediately without waiting for the server.
-    highlights.push(highlight);
-    redraw();
+    const api = {
+        note: "{% url 'add_note' book.id %}",
+        highlight: "{% url 'save_highlight' book.id %}",
+        bookmark: "{% url 'bookmark_page' book.id %}",
+        progress: "{% url 'save_progress' book.id %}",
+        annotation: "{% url 'save_annotation' book.id %}",
+        deleteItem: "{% url 'delete_study_item' book.id 'note' 0 %}"
+    };
 
-    const article = addItem(
-        'highlights-list',
-        'sr-highlight',
-        'Highlight',
-        text,
-        page,
-        'highlight',
-        highlight.id
-    );
+    if (!pdfjs) {
+        $('reader-error').textContent =
+            'PDF.js failed to load. Check your internet connection.';
 
-    selection.removeAllRanges();
-    setTool('select');
+        $('reader-error').classList.remove('sr-hidden');
+        return;
+    }
 
-    status('Saving highlight...');
+    pdfjs.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js';
 
-    // 2. Save in the background.
-    try {
-        const response = await post(api.highlight, {
-            text: text,
-            page: highlight.page,
-            color: highlight.color,
-            position_data: highlight.position_data
+    // ==========================================
+    // 2. PDF ELEMENTS AND VARIABLES
+    // ==========================================
+
+    const canvas = $('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+
+    const overlay = $('annotation-canvas');
+    const octx = overlay.getContext('2d');
+
+    const layer = $('text-layer');
+    const wrapper = $('pdf-wrapper');
+
+    let pdf = null;
+    let page = Number($('page-input').value) || 1;
+
+    let scale = 1;
+    let fit = true;
+    let busy = false;
+    let pending = null;
+
+    let tool = 'select';
+    let color = '#FFE66D';
+
+    let drawing = false;
+    let stroke = null;
+
+    let progressTimer;
+
+    let highlights = [];
+    let annotations = [];
+    let pageStrokes = [];
+
+    let undo = [];
+    let redo = [];
+
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+    // ==========================================
+    // 3. API POST HELPER
+    // ==========================================
+
+    async function post(url, data) {
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf
+            },
+            body: JSON.stringify(data)
         });
 
-        // 3. Replace temporary ID with the database ID.
-        highlight.id = response.id;
+        const result = await response.json().catch(() => ({}));
 
-        article.dataset.itemId = response.id;
-        article.querySelector('[data-delete-id]').dataset.deleteId =
-            response.id;
+        if (!response.ok) {
+            throw new Error(
+                result.error || 'Request failed (' + response.status + ')'
+            );
+        }
 
-        status('Highlight saved successfully.');
+        return result;
+    }
 
-    } catch (error) {
-        // 4. Remove the temporary highlight if saving fails.
-        highlights = highlights.filter(h => h !== highlight);
-        article.remove();
+    // ==========================================
+    // 4. DELETE URL GENERATOR
+    // ==========================================
+
+    function getDeleteUrl(type, id) {
+        return api.deleteItem.replace(
+            '/note/0/',
+            `/${type}/${id}/`
+        );
+    }
+
+    // ==========================================
+    // 5. DELETE NOTES, HIGHLIGHTS,
+    //    BOOKMARKS AND DRAWINGS
+    // ==========================================
+
+    // IMPORTANT: This is the ONLY delete event listener.
+
+    document.addEventListener('click', async function(e) {
+
+        const button = e.target.closest('[data-delete-type]');
+
+        if (!button) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const type = button.dataset.deleteType;
+        const id = Number(button.dataset.deleteId);
+
+        console.log('DELETE BUTTON CLICKED:', type, id);
+
+        // Validate item type
+        if (!['note', 'highlight', 'bookmark', 'drawing'].includes(type)) {
+            console.error('Invalid item type:', type);
+            status('Invalid item type.');
+            return;
+        }
+
+        // Validate database ID
+        if (!Number.isInteger(id) || id <= 0) {
+            console.error('Invalid item ID:', id);
+            status('Invalid item ID. Please refresh the page.');
+            return;
+        }
+
+        // Confirm deletion
+        if (!confirm(
+            'Are you sure you want to delete this ' + type + '?'
+        )) {
+            return;
+        }
+
+        const originalText = button.innerHTML;
+
+        button.disabled = true;
+        button.innerHTML =
+            '<i class="bi bi-hourglass-split"></i> Deleting...';
+
+        try {
+
+            // Generate URL
+            const deleteUrl = getDeleteUrl(type, id);
+
+            console.log('DELETE URL:', deleteUrl);
+
+            // Send deletion request to Django
+            const response = await post(deleteUrl, {});
+
+            console.log('DELETE RESPONSE:', response);
+
+            if (!response.success) {
+                throw new Error(
+                    response.error || 'Deletion failed.'
+                );
+            }
+
+            // ==================================
+            // UPDATE IN-MEMORY DATA
+            // ==================================
+
+            
+            
+            if (type === 'highlight') {
+
+                normalizeHighlights();
+            
+                highlights = highlights.filter(
+                    h => Number(h.id) !== id
+                );
+            
+                console.log('Highlight removed from memory:', id);
+            }
+            
+            if (type === 'drawing') {
+
+                if (Array.isArray(annotations)) {
+                    annotations = annotations.filter(
+                        a => Number(a.id) !== id
+                    );
+                }
+            
+                if (Array.isArray(pageStrokes)) {
+                    pageStrokes = pageStrokes.filter(
+                        s => Number(s.id) !== id
+                    );
+                }
+            
+                if (Array.isArray(undo)) {
+                    undo = undo.filter(
+                        s => Number(s.id) !== id
+                    );
+                }
+            
+                if (Array.isArray(redo)) {
+                    redo = redo.filter(
+                        s => Number(s.id) !== id
+                    );
+                }
+            
+                console.log('Drawing deleted from memory:', id);
+            
+                // Refresh canvas only if necessary
+                redraw();
+                update();
+            }
+            // ==================================
+            // REMOVE ITEM FROM SIDEBAR
+            // ==================================
+
+            const article = button.closest('.sr-item');
+
+            if (article) {
+
+                const parentList = article.parentElement;
+
+                article.remove();
+
+                // Display empty state if no items remain
+                if (
+                    parentList &&
+                    !parentList.querySelector('.sr-item')
+                ) {
+
+                    const empty = document.createElement('div');
+
+                    empty.className = 'sr-empty';
+
+                    const messages = {
+                        note: 'No notes yet. Add your first study note below.',
+                        highlight: 'Select text, then choose Highlight to save it.',
+                        bookmark: 'Your saved pages will appear here.',
+                        drawing: 'Pencil marks will appear here.'
+                    };
+
+                    empty.textContent = messages[type];
+
+                    parentList.appendChild(empty);
+                }
+            }
+
+            status(
+                type.charAt(0).toUpperCase() +
+                type.slice(1) +
+                ' deleted successfully.'
+            );
+
+        } catch (error) {
+
+            console.error('DELETE ERROR:', error);
+
+            button.disabled = false;
+            button.innerHTML = originalText;
+
+            status('Delete failed: ' + error.message);
+
+            alert(
+                'Could not delete item: ' + error.message
+            );
+        }
+
+    });
+
+    // ==========================================
+    // 6. UPDATE READER CONTROLS
+    // ==========================================
+
+    function update() {
+
+        $('page-input').value = page;
+        $('note-page').textContent = page;
+
+        $('prev-page').disabled = !pdf || page <= 1;
+
+        $('next-page').disabled =
+            !pdf || page >= pdf.numPages;
+
+        $('page-input').max = pdf ? pdf.numPages : 1;
+
+        const percentage = pdf
+            ? Math.round(page / pdf.numPages * 100)
+            : 0;
+
+        $('progress-fill').style.width = percentage + '%';
+
+        $('progress-text').textContent =
+            percentage + '% through book';
+
+        $('zoom-label').textContent =
+            Math.round(scale * 100) + '%';
+
+        $('undo-btn').disabled = !undo.length;
+        $('redo-btn').disabled = !redo.length;
+    }
+
+    // ==========================================
+    // 7. DRAWING HELPERS
+    // ==========================================
+
+    function point(e) {
+
+        const rect = overlay.getBoundingClientRect();
+
+        return {
+            x: clamp(
+                (e.clientX - rect.left) / rect.width,
+                0,
+                1
+            ),
+
+            y: clamp(
+                (e.clientY - rect.top) / rect.height,
+                0,
+                1
+            )
+        };
+    }
+
+    function draw(points, c, w, eraser = false) {
+
+        if (!points?.length) return;
+
+        const width = overlay.clientWidth;
+        const height = overlay.clientHeight;
+
+        octx.save();
+
+        octx.lineCap = 'round';
+        octx.lineJoin = 'round';
+
+        octx.globalCompositeOperation = eraser
+            ? 'destination-out'
+            : 'source-over';
+
+        octx.strokeStyle = eraser
+            ? 'rgba(0,0,0,1)'
+            : c;
+
+        octx.lineWidth = eraser
+            ? Math.max(w, 18)
+            : w;
+
+        octx.beginPath();
+
+        octx.moveTo(
+            points[0].x * width,
+            points[0].y * height
+        );
+
+        points.slice(1).forEach(p => {
+
+            octx.lineTo(
+                p.x * width,
+                p.y * height
+            );
+
+        });
+
+        if (points.length === 1) {
+
+            octx.lineTo(
+                points[0].x * width + 0.1,
+                points[0].y * height + 0.1
+            );
+
+        }
+
+        octx.stroke();
+        octx.restore();
+    }
+
+    // ==========================================
+    // 8. HIGHLIGHT RENDERING
+    // ==========================================
+
+    function drawHighlight(h) {
+
+        const rects = h.position_data?.rects;
+
+        if (!Array.isArray(rects)) return;
+
+        const width = overlay.clientWidth;
+        const height = overlay.clientHeight;
+
+        octx.save();
+
+        octx.globalCompositeOperation = 'multiply';
+        octx.globalAlpha = 0.45;
+        octx.fillStyle = h.color || '#FFE66D';
+
+        rects.forEach(r => {
+
+            octx.fillRect(
+                r.x * width,
+                r.y * height,
+                r.w * width,
+                r.h * height
+            );
+
+        });
+
+        octx.restore();
+    }
+
+    // ==========================================
+    // 9. REDRAW CANVAS
+    // ==========================================
+
+
+    function normalizeHighlights() {
+
+        if (Array.isArray(highlights)) {
+            return;
+        }
+    
+        if (highlights && typeof highlights === 'object') {
+    
+            const values = Object.values(highlights);
+    
+            highlights = values
+                .flatMap(value => Array.isArray(value) ? value : [value])
+                .filter(item =>
+                    item &&
+                    typeof item === 'object' &&
+                    ('id' in item || 'page' in item)
+                );
+    
+        } else {
+            highlights = [];
+        }
+    
+        console.log('Highlights normalized:', highlights);
+    }
+
+
+
+
+    
+    function redraw() {
+    
+        // Ensure highlights is always an array
+        normalizeHighlights();
+    
+        octx.clearRect(
+            0,
+            0,
+            overlay.clientWidth,
+            overlay.clientHeight
+        );
+    
+        // Render saved drawings
+        if (Array.isArray(pageStrokes)) {
+    
+            pageStrokes.forEach(s => {
+    
+                draw(
+                    s.points,
+                    s.color,
+                    s.width,
+                    s.tool === 'eraser'
+                );
+    
+            });
+    
+        }
+    
+        // Render highlights on the current page
+        highlights
+            .filter(h => Number(h.page) === Number(page))
+            .forEach(drawHighlight);
+    }
+
+
+    // ==========================================
+    // 10. PDF PAGE RENDERING
+    // ==========================================
+
+    async function render(n) {
+
+        if (!pdf) return;
+
+        if (busy) {
+            pending = n;
+            return;
+        }
+
+        busy = true;
+
+        status('Rendering page ' + n + '…');
+
+        try {
+
+            const p = await pdf.getPage(n);
+
+            if (fit) {
+
+                scale = clamp(
+                    ($('viewer-container').clientWidth - 42) /
+                    p.getViewport({ scale: 1 }).width,
+                    0.5,
+                    2.5
+                );
+
+            }
+
+            const vp = p.getViewport({ scale });
+
+            const dpr = window.devicePixelRatio || 1;
+
+            canvas.width = vp.width * dpr;
+            canvas.height = vp.height * dpr;
+
+            canvas.style.width = vp.width + 'px';
+            canvas.style.height = vp.height + 'px';
+
+            wrapper.style.width = vp.width + 'px';
+            wrapper.style.height = vp.height + 'px';
+
+            layer.replaceChildren();
+
+            layer.style.width = vp.width + 'px';
+            layer.style.height = vp.height + 'px';
+
+            overlay.width = vp.width * dpr;
+            overlay.height = vp.height * dpr;
+
+            overlay.style.width = vp.width + 'px';
+            overlay.style.height = vp.height + 'px';
+
+            octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            await p.render({
+                canvasContext: ctx,
+                viewport: vp,
+                transform: dpr !== 1
+                    ? [dpr, 0, 0, dpr, 0, 0]
+                    : null
+            }).promise;
+
+            if (pending === null) {
+
+                const tc = await p.getTextContent();
+
+                if (pending === null) {
+
+                    await pdfjs.renderTextLayer({
+                        textContentSource: tc,
+                        container: layer,
+                        viewport: vp,
+                        textDivs: []
+                    }).promise;
+
+                }
+            }
+
+            // Load drawings belonging to the current page
+            pageStrokes = annotations
+                .filter(a => Number(a.page) === page)
+                .map(a => {
+
+                    const d = a.position_data || {};
+
+                    return {
+                        points: d.points || [],
+                        color: a.color || '#FF0000',
+                        width: d.width || 2.5,
+                        tool: d.tool || 'pencil',
+                        id: a.id
+                    };
+
+                })
+                .filter(s => s.points.length);
+
+            redraw();
+
+            status('Page ' + n + ' of ' + pdf.numPages);
+
+        } catch (e) {
+
+            console.error(e);
+
+            status('Could not render this page.');
+
+        } finally {
+
+            busy = false;
+
+            update();
+
+            if (pending !== null) {
+
+                const next = pending;
+                pending = null;
+
+                render(next);
+            }
+        }
+    }
+
+    // ==========================================
+    // 11. PAGE NAVIGATION AND PROGRESS
+    // ==========================================
+
+    function goto(n) {
+
+        if (!pdf || !Number.isFinite(Number(n))) return;
+
+        page = clamp(
+            Math.trunc(Number(n)),
+            1,
+            pdf.numPages
+        );
+
+        update();
+        render(page);
+
+        $('viewer-container').scrollTop = 0;
+
+        clearTimeout(progressTimer);
+
+        progressTimer = setTimeout(() => {
+
+            post(api.progress, { page })
+                .catch(console.warn);
+
+        }, 600);
+    }
+
+    $('prev-page').onclick = () => goto(page - 1);
+    $('next-page').onclick = () => goto(page + 1);
+
+    $('page-input').onchange = e => {
+        goto(e.target.value);
+    };
+
+    // ==========================================
+    // 12. ZOOM CONTROLS
+    // ==========================================
+
+    function zoom(d) {
+
+        fit = false;
+
+        scale = clamp(
+            Math.round((scale + d) * 100) / 100,
+            0.5,
+            3
+        );
+
+        render(page);
+    }
+
+    $('zoom-in').onclick = () => zoom(0.2);
+    $('zoom-out').onclick = () => zoom(-0.2);
+
+    $('fit-width').onclick = () => {
+        fit = true;
+        render(page);
+    };
+
+    $('reset-zoom').onclick = () => {
+        fit = false;
+        scale = 1;
+        render(page);
+    };
+
+    // ==========================================
+    // 13. FULLSCREEN AND RESIZE
+    // ==========================================
+
+    $('fullscreen-btn').onclick = async () => {
+
+        try {
+
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            } else {
+                await $('reader-card').requestFullscreen();
+            }
+
+        } catch (e) {
+
+            status('Fullscreen unavailable in this browser.');
+
+        }
+    };
+
+    document.addEventListener('fullscreenchange', () => {
+
+        if (pdf && fit) {
+            render(page);
+        }
+
+    });
+
+    let rt;
+
+    window.addEventListener('resize', () => {
+
+        clearTimeout(rt);
+
+        rt = setTimeout(() => {
+
+            if (pdf && fit) {
+                render(page);
+            }
+
+        }, 180);
+
+    });
+
+    // ==========================================
+    // 14. KEYBOARD NAVIGATION
+    // ==========================================
+
+    document.addEventListener('keydown', e => {
+
+        if (e.target.closest('input,textarea,button')) return;
+
+        if (e.key === 'ArrowLeft') {
+            goto(page - 1);
+        }
+
+        if (e.key === 'ArrowRight') {
+            goto(page + 1);
+        }
+
+    });
+
+    // ==========================================
+    // 15. SIDEBAR TABS
+    // ==========================================
+
+    document.querySelectorAll('.sr-tab').forEach(b => {
+
+        b.onclick = () => {
+
+            document.querySelectorAll('.sr-tab').forEach(x => {
+                x.classList.toggle('active', x === b);
+            });
+
+            document.querySelectorAll('.sr-panel').forEach(x => {
+                x.classList.toggle(
+                    'active',
+                    x.id === b.dataset.panel
+                );
+            });
+
+        };
+
+    });
+
+    // ==========================================
+    // 16. OPEN SAVED PAGE
+    // ==========================================
+
+    document.addEventListener('click', e => {
+
+        const button = e.target.closest('[data-goto-page]');
+
+        if (button) {
+            goto(Number(button.dataset.gotoPage));
+        }
+
+    });
+
+    // ==========================================
+    // 17. TOOL SELECTION
+    // ==========================================
+
+    function setTool(t) {
+
+        tool = t;
+
+        document.querySelectorAll('[data-tool]').forEach(b => {
+
+            b.classList.toggle(
+                'active',
+                b.dataset.tool === t
+            );
+
+        });
+
+        overlay.classList.toggle(
+            'drawing',
+            t === 'pencil' || t === 'eraser'
+        );
+
+        layer.style.pointerEvents =
+            t === 'pencil' || t === 'eraser'
+                ? 'none'
+                : 'auto';
+
+        status(
+            t === 'highlight'
+                ? 'Select text in the PDF to save a highlight.'
+                : t === 'pencil'
+                    ? 'Draw on the page.'
+                    : t === 'eraser'
+                        ? 'Draw over marks to erase.'
+                        : 'Selection mode'
+        );
+    }
+
+    document.querySelectorAll('[data-tool]').forEach(b => {
+
+        b.onclick = () => setTool(b.dataset.tool);
+
+    });
+
+    // ==========================================
+    // 18. HIGHLIGHT COLOURS
+    // ==========================================
+
+    document.querySelectorAll('.sr-color').forEach(b => {
+
+        b.onclick = () => {
+
+            color = b.dataset.color;
+
+            document.querySelectorAll('.sr-color').forEach(x => {
+
+                x.classList.toggle('active', x === b);
+
+            });
+
+        };
+
+    });
+
+    // ==========================================
+    // 19. ADD SIDEBAR ITEM
+    // ==========================================
+
+    function addItem(
+        listId,
+        cls,
+        title,
+        body,
+        pageNo,
+        itemType,
+        itemId
+    ) {
+
+        const list = $(listId);
+
+        list.querySelector('.sr-empty')?.remove();
+
+        const article = document.createElement('article');
+
+        article.className = 'sr-item ' + cls;
+
+        article.dataset.itemType = itemType;
+        article.dataset.itemId = itemId;
+
+        const meta = document.createElement('div');
+
+        meta.className = 'sr-meta';
+
+        const label = document.createElement('span');
+
+        label.textContent = title + ' · Page ' + pageNo;
+
+        const date = document.createElement('span');
+
+        date.textContent = 'Just now';
+
+        meta.append(label, date);
+
+        article.append(meta);
+
+        if (body) {
+
+            const p = document.createElement('p');
+
+            p.textContent = body;
+
+            article.append(p);
+        }
+
+        const actions = document.createElement('div');
+
+        actions.className = 'sr-actions';
+
+        const openBtn = document.createElement('button');
+
+        openBtn.type = 'button';
+        openBtn.className = 'sr-mini';
+        openBtn.dataset.gotoPage = pageNo;
+
+        openBtn.innerHTML =
+            '<i class="bi bi-book-open"></i> Open page';
+
+        const deleteBtn = document.createElement('button');
+
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'sr-mini text-danger ms-1';
+
+        deleteBtn.dataset.deleteType = itemType;
+        deleteBtn.dataset.deleteId = itemId;
+
+        deleteBtn.innerHTML =
+            '<i class="bi bi-trash"></i> Delete';
+
+        actions.append(openBtn, deleteBtn);
+
+        article.append(actions);
+
+        list.prepend(article);
+
+        return article;
+    }
+
+    // ==========================================
+    // 20. SAVE HIGHLIGHT
+    // ==========================================
+
+    async function saveHighlight() {
+
+        const selection = window.getSelection();
+
+        if (!selection || !selection.rangeCount) return;
+
+        const text = selection.toString().trim();
+
+        if (!text) {
+
+            status('Select the words you want to highlight.');
+
+            return;
+        }
+
+        const range = selection.getRangeAt(0);
+
+        if (
+            !layer.contains(range.startContainer) ||
+            !layer.contains(range.endContainer)
+        ) {
+
+            status('Please select text inside the PDF.');
+
+            return;
+        }
+
+        const wrapperRect = wrapper.getBoundingClientRect();
+
+        const rects = Array.from(range.getClientRects())
+            .map(r => {
+
+                const left = Math.max(
+                    r.left,
+                    wrapperRect.left
+                );
+
+                const top = Math.max(
+                    r.top,
+                    wrapperRect.top
+                );
+
+                const right = Math.min(
+                    r.right,
+                    wrapperRect.right
+                );
+
+                const bottom = Math.min(
+                    r.bottom,
+                    wrapperRect.bottom
+                );
+
+                return {
+                    x: (left - wrapperRect.left) / wrapperRect.width,
+                    y: (top - wrapperRect.top) / wrapperRect.height,
+                    w: (right - left) / wrapperRect.width,
+                    h: (bottom - top) / wrapperRect.height
+                };
+
+            })
+            .filter(r => r.w > 0 && r.h > 0);
+
+        if (!rects.length) {
+
+            status('Could not locate the selected words.');
+
+            return;
+        }
+
+        const highlight = {
+            id: 'temporary-' + Date.now(),
+            text: text,
+            page: page,
+            color: color,
+            position_data: {
+                rects: rects
+            }
+        };
+
+        // Display immediately
+        highlights.push(highlight);
 
         redraw();
 
-        status('Highlight could not be saved: ' + error.message);
-        console.error(error);
+        const article = addItem(
+            'highlights-list',
+            'sr-highlight',
+            'Highlight',
+            text,
+            page,
+            'highlight',
+            highlight.id
+        );
+
+        selection.removeAllRanges();
+
+        setTool('select');
+
+        status('Saving highlight...');
+
+        try {
+
+            const response = await post(api.highlight, {
+                text: text,
+                page: highlight.page,
+                color: highlight.color,
+                position_data: highlight.position_data
+            });
+
+            // Replace temporary ID with database ID
+            highlight.id = response.id;
+
+            article.dataset.itemId = response.id;
+
+            article.querySelector('[data-delete-id]').dataset.deleteId =
+                response.id;
+
+            status('Highlight saved successfully.');
+
+        } catch (error) {
+
+            highlights = highlights.filter(
+                h => h !== highlight
+            );
+
+            article.remove();
+
+            redraw();
+
+            status(
+                'Highlight could not be saved: ' + error.message
+            );
+
+            console.error(error);
+        }
     }
-}
 
+    layer.addEventListener('mouseup', () => {
 
-layer.addEventListener('mouseup',()=>{if(tool==='highlight')setTimeout(saveHighlight,30);});
-function pointerDown(e){if(!['pencil','eraser'].includes(tool))return;e.preventDefault();overlay.setPointerCapture(e.pointerId);drawing=true;stroke={points:[point(e)],color,width:tool==='eraser'?18:2.5,tool};draw(stroke.points,color,stroke.width,tool==='eraser');}
-function pointerMove(e){if(!drawing||!stroke)return;stroke.points.push(point(e));draw(stroke.points.slice(-2),stroke.color,stroke.width,stroke.tool==='eraser');}
-async function pointerUp(){if(!drawing||!stroke)return;drawing=false;let s=stroke;stroke=null;try{let d=await post(api.annotation,{page,annotation_type:'pencil',color:s.color,position_data:{points:s.points,width:s.width,tool:s.tool}});s.id=d.id;pageStrokes.push(s);annotations.push({...s,page,position_data:{points:s.points,width:s.width,tool:s.tool}});undo.push(s);redo=[];update();addItem(
-    'drawings-list',
-    'sr-drawing',
-    s.tool === 'eraser' ? 'Erasure' : 'Pencil mark',
-    '',
-    page,
-    'drawing',
-    d.id
-);status('Drawing saved.');}catch(e){redraw();status('Drawing save failed: '+e.message);}}
-overlay.addEventListener('pointerdown',pointerDown);overlay.addEventListener('pointermove',pointerMove);overlay.addEventListener('pointerup',pointerUp);overlay.addEventListener('pointercancel',pointerUp);
-$('undo-btn').onclick=()=>{if(!undo.length)return;let s=undo.pop();redo.push(s);let i=pageStrokes.lastIndexOf(s);if(i>=0)pageStrokes.splice(i,1);redraw();update();status('Undo applied to this session.');};
-$('redo-btn').onclick=()=>{if(!redo.length)return;let s=redo.pop();pageStrokes.push(s);redraw();update();status('Redo applied to this session.');};
-$('bookmark-btn').onclick=async()=>{let b=$('bookmark-btn');b.disabled=true;try{let d=await post(api.bookmark,{page});if(d.status==='already_saved'){status('This page is already bookmarked.');return;}addItem(
-    'bookmarks-list',
-    'sr-bookmark',
-    'Bookmark',
-    '',
-    page,
-    'bookmark',
-    d.id
-);status('Page bookmarked.');}catch(e){status('Bookmark failed: '+e.message);}finally{b.disabled=false;}};
-$('note-form').onsubmit=async e=>{e.preventDefault();let text=$('note-text').value.trim();if(!text)return;let b=$('save-note-btn'),p=page;b.disabled=true;$('note-feedback').textContent='Saving…';try{const response = await post(api.note, {
-    note: text,
-    page: p
-});
+        if (tool === 'highlight') {
+            setTimeout(saveHighlight, 30);
+        }
 
-addItem(
-    'notes-list',
-    '',
-    'Note',
-    text,
-    p,
-    'note',
-    response.id
-);$('note-text').value='';$('note-feedback').textContent='Note saved.';$('note-feedback').style.color='#15803d';}catch(err){$('note-feedback').textContent='Could not save note: '+err.message;$('note-feedback').style.color='#b91c1c';}finally{b.disabled=false;}};
-// JSONField values are serialized by the Django view to valid JSON before embedding.
-highlights = JSON.parse($('saved-highlights-data').textContent || '[]');
-annotations = JSON.parse($('saved-annotations-data').textContent || '[]');
-pdfjs.getDocument(pdfUrl).promise.then(doc=>{pdf=doc;$('page-count').textContent=doc.numPages;page=clamp(page,1,doc.numPages);update();render(page);}).catch(e=>{console.error(e);$('reader-error').textContent='Failed to load PDF. Check the file and access permissions.';$('reader-error').classList.remove('sr-hidden');status('PDF failed to load.');});
-update();
+    });
+
+    // ==========================================
+    // 21. PENCIL AND ERASER
+    // ==========================================
+
+    function pointerDown(e) {
+
+        if (!['pencil', 'eraser'].includes(tool)) return;
+
+        e.preventDefault();
+
+        overlay.setPointerCapture(e.pointerId);
+
+        drawing = true;
+
+        stroke = {
+            points: [point(e)],
+            color: color,
+            width: tool === 'eraser' ? 18 : 2.5,
+            tool: tool
+        };
+
+        draw(
+            stroke.points,
+            color,
+            stroke.width,
+            tool === 'eraser'
+        );
+    }
+
+    function pointerMove(e) {
+
+        if (!drawing || !stroke) return;
+
+        stroke.points.push(point(e));
+
+        draw(
+            stroke.points.slice(-2),
+            stroke.color,
+            stroke.width,
+            stroke.tool === 'eraser'
+        );
+    }
+
+    async function pointerUp() {
+
+        if (!drawing || !stroke) return;
+
+        drawing = false;
+
+        const s = stroke;
+
+        stroke = null;
+
+        try {
+
+            const d = await post(api.annotation, {
+                page: page,
+                annotation_type: 'pencil',
+                color: s.color,
+                position_data: {
+                    points: s.points,
+                    width: s.width,
+                    tool: s.tool
+                }
+            });
+
+            s.id = d.id;
+
+            pageStrokes.push(s);
+
+            annotations.push({
+                ...s,
+                page: page,
+                position_data: {
+                    points: s.points,
+                    width: s.width,
+                    tool: s.tool
+                }
+            });
+
+            undo.push(s);
+
+            redo = [];
+
+            update();
+
+            addItem(
+                'drawings-list',
+                'sr-drawing',
+                s.tool === 'eraser' ? 'Erasure' : 'Pencil mark',
+                '',
+                page,
+                'drawing',
+                d.id
+            );
+
+            status('Drawing saved.');
+
+        } catch (e) {
+
+            redraw();
+
+            status('Drawing save failed: ' + e.message);
+        }
+    }
+
+    overlay.addEventListener('pointerdown', pointerDown);
+    overlay.addEventListener('pointermove', pointerMove);
+    overlay.addEventListener('pointerup', pointerUp);
+    overlay.addEventListener('pointercancel', pointerUp);
+
+    // ==========================================
+    // 22. UNDO AND REDO
+    // ==========================================
+
+    $('undo-btn').onclick = () => {
+
+        if (!undo.length) return;
+
+        const s = undo.pop();
+
+        redo.push(s);
+
+        const i = pageStrokes.lastIndexOf(s);
+
+        if (i >= 0) {
+            pageStrokes.splice(i, 1);
+        }
+
+        redraw();
+
+        update();
+
+        status('Undo applied to this session.');
+    };
+
+    $('redo-btn').onclick = () => {
+
+        if (!redo.length) return;
+
+        const s = redo.pop();
+
+        pageStrokes.push(s);
+
+        redraw();
+
+        update();
+
+        status('Redo applied to this session.');
+    };
+
+    // ==========================================
+    // 23. BOOKMARK PAGE
+    // ==========================================
+
+    $('bookmark-btn').onclick = async () => {
+
+        const b = $('bookmark-btn');
+
+        b.disabled = true;
+
+        try {
+
+            const d = await post(api.bookmark, {
+                page: page
+            });
+
+            if (d.status === 'already_saved') {
+
+                status('This page is already bookmarked.');
+
+                return;
+            }
+
+            addItem(
+                'bookmarks-list',
+                'sr-bookmark',
+                'Bookmark',
+                '',
+                page,
+                'bookmark',
+                d.id
+            );
+
+            status('Page bookmarked.');
+
+        } catch (e) {
+
+            status('Bookmark failed: ' + e.message);
+
+        } finally {
+
+            b.disabled = false;
+        }
+    };
+
+    // ==========================================
+    // 24. SAVE NOTE
+    // ==========================================
+
+    $('note-form').onsubmit = async e => {
+
+        e.preventDefault();
+
+        const text = $('note-text').value.trim();
+
+        if (!text) return;
+
+        const b = $('save-note-btn');
+
+        const p = page;
+
+        b.disabled = true;
+
+        $('note-feedback').textContent = 'Saving…';
+
+        try {
+
+            const response = await post(api.note, {
+                note: text,
+                page: p
+            });
+
+            addItem(
+                'notes-list',
+                '',
+                'Note',
+                text,
+                p,
+                'note',
+                response.id
+            );
+
+            $('note-text').value = '';
+
+            $('note-feedback').textContent = 'Note saved.';
+
+            $('note-feedback').style.color = '#15803d';
+
+        } catch (err) {
+
+            $('note-feedback').textContent =
+                'Could not save note: ' + err.message;
+
+            $('note-feedback').style.color = '#b91c1c';
+
+        } finally {
+
+            b.disabled = false;
+        }
+    };
+
+    // ==========================================
+    // 25. LOAD SAVED HIGHLIGHTS AND ANNOTATIONS
+    // ==========================================
+
+    highlights = JSON.parse(
+        $('saved-highlights-data').textContent || '[]'
+    );
+
+    annotations = JSON.parse(
+        $('saved-annotations-data').textContent || '[]'
+    );
+
+    // ==========================================
+    // 26. LOAD PDF
+    // ==========================================
+
+    pdfjs.getDocument(pdfUrl).promise
+
+        .then(doc => {
+
+            pdf = doc;
+
+            $('page-count').textContent = doc.numPages;
+
+            page = clamp(
+                page,
+                1,
+                doc.numPages
+            );
+
+            update();
+
+            render(page);
+
+        })
+
+        .catch(e => {
+
+            console.error(e);
+
+            $('reader-error').textContent =
+                'Failed to load PDF. Check the file and access permissions.';
+
+            $('reader-error').classList.remove('sr-hidden');
+
+            status('PDF failed to load.');
+        });
+
+    // Initial update
+    update();
+
 })();
 </script>
+
 {% endblock %}
