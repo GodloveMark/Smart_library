@@ -30,9 +30,17 @@ SECRET_KEY = '4c!5dmr29c&9d(5#ekg%51_0b+5-pagr!&i((1==-5zoz$h^8^'
 DEBUG = True
 
 #ALLOWED_HOSTS = []
-ALLOWED_HOSTS = ["3195-196-41-56-187.ngrok-free.app", "127.0.0.1", "localhost"]
-CSRF_TRUSTED_ORIGINS = ["https://3195-196-41-56-187.ngrok-free.app"]
+#ALLOWED_HOSTS = ["3195-196-41-56-187.ngrok-free.app", "127.0.0.1", "localhost"]
+#CSRF_TRUSTED_ORIGINS = ["https://3195-196-41-56-187.ngrok-free.app"]
+ALLOWED_HOSTS = [
+    'library.mwalikohub.com',
+    'localhost',
+    '127.0.0.1',
+]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://library.mwalikohub.com',
+]
 
 # Application definition
 
