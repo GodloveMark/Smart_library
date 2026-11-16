@@ -49,4 +49,6 @@ urlpatterns = [
     path('admin-panel/users/toggle/<int:user_id>/', views.admin_toggle_user, name='admin_toggle_user'),
     path('admin-panel/create-manager/', views.create_manager, name='create_manager'),
     path('admin-panel/books/', views.admin_books, name='admin_books'),
+    
 ]
+ 
