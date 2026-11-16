@@ -24,6 +24,7 @@ urlpatterns = [
     path('manager/approve/<int:user_id>/', views.approve_tutor, name='approve_tutor'),
     path('manager/students/', views.manager_students, name='manager_students'),
     path('manager/books/', views.manager_books, name='manager_books'),
+    path('manager/tutors/', views.manager_tutors, name='manager_tutors'),
 
     # Notifications
     path('notifications/read/', views.mark_notifications_read, name='mark_notifications_read'),
@@ -34,4 +35,5 @@ urlpatterns = [
     path('admin-panel/users/toggle/<int:user_id>/', views.admin_toggle_user, name='admin_toggle_user'),
     path('admin-panel/create-manager/', views.create_manager, name='create_manager'),
     path('admin-panel/books/', views.admin_books, name='admin_books'),
+   
 ]
