@@ -744,3 +744,58 @@ def manager_books(request):
         "manager/books.html",
         context
     )
+
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect
+from django.views.decorators.http import require_POST
+
+from .models import Book
+
+
+
+@login_required
+@require_POST
+def delete_book(request, pk):
+
+    book = get_object_or_404(Book, pk=pk)
+
+    # Verify ownership
+    if book.tutor_id != request.user.id:
+        messages.error(
+            request,
+            "You are not authorized to delete this book."
+        )
+        return redirect("tutor_dashboard")
+
+    book_title = book.title
+
+    # Collect uploaded files
+    files_to_delete = []
+
+    for field_name in ("file", "cover"):
+        uploaded_file = getattr(book, field_name, None)
+
+        if uploaded_file and uploaded_file.name:
+            files_to_delete.append(
+                (uploaded_file.storage, uploaded_file.name)
+            )
+
+    # Delete database record
+    book.delete()
+
+    # Delete physical files
+    for storage, file_name in files_to_delete:
+        try:
+            storage.delete(file_name)
+        except Exception as error:
+            print(f"File deletion error: {error}")
+
+    messages.success(
+        request,
+        f'"{book_title}" was successfully deleted.'
+    )
+
+    return redirect("tutor_dashboard")
+

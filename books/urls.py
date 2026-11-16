@@ -1,6 +1,6 @@
 
 from django.urls import path
-from .views import BooksListView,summarize_book_view, chat_with_book, upload_book, BooksDetailView, BookCheckoutView, paymentComplete, SearchResultsListView
+from .views import BooksListView,summarize_book_view, delete_book, chat_with_book, upload_book, BooksDetailView, BookCheckoutView, paymentComplete, SearchResultsListView
 from . import views
 
 urlpatterns = [
@@ -61,6 +61,13 @@ urlpatterns = [
         '<int:pk>/delete-study-item/<str:item_type>/<int:item_id>/',
         views.delete_study_item,
         name='delete_study_item'
+    ),
+
+
+    path(
+        'tutor/books/<int:pk>/delete/',
+        delete_book,
+        name='delete_book'
     ),
 
     

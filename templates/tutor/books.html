@@ -1,13 +1,14 @@
+
 {% extends 'base.html' %}
 
 {% block content %}
 
 <div class="container-fluid py-4">
 
+    <!-- PAGE HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
-
             <h2 class="fw-bold mb-1">
                 📚 My Books
             </h2>
@@ -15,36 +16,48 @@
             <p class="text-muted mb-0">
                 Books you have uploaded to the library.
             </p>
-
         </div>
 
-
         <div>
-
-            <a
-                href="{% url 'tutor_dashboard' %}"
-                class="btn btn-outline-secondary"
-            >
+            <a href="{% url 'tutor_dashboard' %}"
+               class="btn btn-outline-secondary">
                 Dashboard
             </a>
 
-            <a
-                href="{% url 'upload_book' %}"
-                class="btn btn-primary"
-            >
+            <a href="{% url 'upload_book' %}"
+               class="btn btn-primary">
                 + Upload Book
             </a>
-
         </div>
 
     </div>
 
 
+    <!-- NOTIFICATIONS -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show"
+                 role="alert">
+
+                {{ message }}
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="alert"
+                        aria-label="Close">
+                </button>
+
+            </div>
+        {% endfor %}
+    {% endif %}
+
+
+    <!-- BOOKS TABLE -->
     <div class="card border-0 shadow-sm">
 
         <div class="card-header bg-white py-3">
 
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between align-items-center">
 
                 <h5 class="fw-bold mb-0">
                     My Library
@@ -68,19 +81,12 @@
                     <thead class="table-light">
 
                         <tr>
-
                             <th>#</th>
-
                             <th>Book</th>
-
                             <th>Author</th>
-
                             <th>Price</th>
-
                             <th>Uploaded</th>
-
                             <th>Action</th>
-
                         </tr>
 
                     </thead>
@@ -98,55 +104,66 @@
 
 
                             <td>
-
                                 <strong>
                                     {{ book.title }}
                                 </strong>
-
                             </td>
 
 
                             <td>
-
                                 {{ book.author|default:"—" }}
-
                             </td>
 
 
                             <td>
-
                                 {% if book.price %}
-
                                     {{ book.price }}
-
                                 {% else %}
-
                                     <span class="text-muted">
                                         Free
                                     </span>
-
                                 {% endif %}
-
                             </td>
 
 
                             <td>
-
                                 <small class="text-muted">
                                     {{ book.created_at|date:"d M Y" }}
                                 </small>
-
                             </td>
 
 
                             <td>
 
-                                <a
-                                    href="{% url 'read_book' book.id %}"
-                                    class="btn btn-sm btn-outline-primary"
-                                >
-                                    📖 Read
-                                </a>
+                                <div class="d-flex gap-2">
+
+                                    <!-- READ BUTTON -->
+                                    <a href="{% url 'read_book' book.id %}"
+                                       class="btn btn-sm btn-outline-primary">
+
+                                        📖 Read
+
+                                    </a>
+
+
+                                    <!-- DELETE BUTTON -->
+                                    <form method="POST"
+                                          action="{% url 'delete_book' book.id %}"
+                                          onsubmit="return confirm('Are you sure you want to permanently delete {{ book.title|escapejs }}? This action cannot be undone.');">
+
+                                        {% csrf_token %}
+
+                                        <button type="submit"
+                                                class="btn btn-sm btn-outline-danger">
+
+                                            <i class="fas fa-trash-alt"></i>
+                                            Delete
+
+                                        </button>
+
+                                    </form>
+
+                                </div>
 
                             </td>
 
@@ -157,10 +174,7 @@
 
                         <tr>
 
-                            <td
-                                colspan="6"
-                                class="text-center py-5"
-                            >
+                            <td colspan="6" class="text-center py-5">
 
                                 <div class="fs-1">
                                     📚
@@ -174,11 +188,11 @@
                                     Upload your first book to get started.
                                 </p>
 
-                                <a
-                                    href="{% url 'tutor_upload_book' %}"
-                                    class="btn btn-primary"
-                                >
+                                <a href="{% url 'tutor_upload_book' %}"
+                                   class="btn btn-primary">
+
                                     Upload Book
+
                                 </a>
 
                             </td>

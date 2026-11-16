@@ -50,17 +50,86 @@ class CustomLoginView(LoginView):
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
+from django.db.models import Count, Q
+from django.shortcuts import render
+
+from books.models import Book
+
 
 @login_required
 def tutor_dashboard(request):
     if request.user.user_type != 'tutor':
         raise PermissionDenied("Only tutors allowed")
 
-    books = Book.objects.filter(tutor=request.user)
+    books = Book.objects.filter(
+        tutor=request.user
+    ).order_by('-created_at')
 
-    return render(request, 'tutor/dashboard.html', {'books': books})
+    stats = books.aggregate(
+        total_books=Count('id'),
+        available_books=Count(
+            'id',
+            filter=Q(book_available=True)
+        ),
+        paid_books=Count(
+            'id',
+            filter=Q(price__gt=0)
+        ),
+        free_books=Count(
+            'id',
+            filter=Q(price=0) | Q(price__isnull=True)
+        )
+    )
+
+    context = {
+        'books': books,
+        **stats,
+    }
+
+    return render(request, 'tutor/dashboard.html', context)
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
+from django.shortcuts import render
+
+from books.models import Book
 
 
+@login_required
+def tutor_dashboard(request):
+
+    books = Book.objects.filter(
+        tutor=request.user
+    ).order_by('-created_at')
+
+    stats = books.aggregate(
+        total_books=Count('id'),
+        available_books=Count(
+            'id',
+            filter=Q(book_available=True)
+        ),
+        paid_books=Count(
+            'id',
+            filter=Q(price__gt=0)
+        ),
+        free_books=Count(
+            'id',
+            filter=Q(Q(price=0) | Q(price__isnull=True))
+        )
+    )
+
+    context = {
+        'books': books,
+        **stats,
+    }
+
+    return render(
+        request,
+        'tutor/dashboard.html',
+        context
+    )
 
 from django.contrib.auth.views import LogoutView
 from django.urls import reverse_lazy
