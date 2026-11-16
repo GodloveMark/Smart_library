@@ -19,12 +19,26 @@ urlpatterns = [
     path('manager/tutors/', views.tutor_list, name='tutor_list'),
     path('manager/tutors/create/', views.create_tutor, name='create_tutor'),
     path('manager/tutors/<int:user_id>/toggle/', views.toggle_user, name='toggle_user'),
-    path('manager/tutors/<int:user_id>/books/', views.manager_tutor_books, name='manager_tutor_books'),
+
+    # Manager viewing an individual tutor's books
+    path(
+        'manager/tutors/<int:user_id>/books/',
+        views.tutor_books,
+        name='tutor_books'
+    ),
+
+    # Alternative manager tutor-books route, if used elsewhere
+    path(
+        'manager/tutor/<int:tutor_id>/books/',
+        views.manager_tutor_books,
+        name='manager_tutor_books'
+    ),
+
     path('manager/pending/', views.pending_tutors, name='pending_tutors'),
     path('manager/approve/<int:user_id>/', views.approve_tutor, name='approve_tutor'),
     path('manager/students/', views.manager_students, name='manager_students'),
     path('manager/books/', views.manager_books, name='manager_books'),
-    path('manager/tutors/', views.manager_tutors, name='manager_tutors'),
+    path('manager/tutors/list/', views.manager_tutors, name='manager_tutors'),
 
     # Notifications
     path('notifications/read/', views.mark_notifications_read, name='mark_notifications_read'),
@@ -35,5 +49,4 @@ urlpatterns = [
     path('admin-panel/users/toggle/<int:user_id>/', views.admin_toggle_user, name='admin_toggle_user'),
     path('admin-panel/create-manager/', views.create_manager, name='create_manager'),
     path('admin-panel/books/', views.admin_books, name='admin_books'),
-   
 ]
