@@ -3,11 +3,6 @@ import os
 from functools import lru_cache
 
 from django.conf import settings
-from google import genai
-
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
 
 
 # ==========================================
@@ -23,6 +18,7 @@ CHROMA_PATH = os.path.join(settings.BASE_DIR, "vector_db")
 
 @lru_cache(maxsize=1)
 def get_gemini_client():
+    from google import genai
 
     api_key = os.getenv("GEMINI_API_KEY")
 
@@ -82,6 +78,10 @@ def ask_gemini(prompt):
 
 def index_book(book_id, book_path):
 
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_chroma import Chroma
+
     persist_db_path = os.path.join(
         CHROMA_PATH,
         f"book_{book_id}"
@@ -105,6 +105,8 @@ def index_book(book_id, book_path):
 
     chunks = splitter.split_documents(pages)
 
+    os.makedirs(persist_db_path, exist_ok=True)
+
     Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
@@ -121,6 +123,8 @@ def index_book(book_id, book_path):
 def get_ai_response(question, book_id, book_path):
 
     try:
+
+        from langchain_chroma import Chroma
 
         embeddings = get_embeddings()
 
@@ -184,6 +188,8 @@ ANSWER:
 def summarize_book(book_id, book_path):
 
     try:
+
+        from langchain_chroma import Chroma
 
         embeddings = get_embeddings()
 
