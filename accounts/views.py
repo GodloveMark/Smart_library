@@ -682,3 +682,39 @@ def daily_users():
     return UserActivity.objects.annotate(
         day=TruncDate('date')
     ).values('day').annotate(count=Count('id')).order_by('day')
+
+
+
+
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.shortcuts import render, redirect
+
+from .forms import UserProfileForm
+
+
+@login_required
+def user_profile(request):
+
+    if request.method == 'POST':
+        form = UserProfileForm(
+            request.POST,
+            instance=request.user
+        )
+
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                'Your profile has been updated successfully.'
+            )
+            return redirect('user_profile')
+
+    else:
+        form = UserProfileForm(instance=request.user)
+
+    return render(
+        request,
+        'accounts/profile.html',
+        {'form': form}
+    )

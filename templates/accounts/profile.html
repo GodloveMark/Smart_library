@@ -1,0 +1,71 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container py-5">
+
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-circle mr-2"></i>
+                        My Profile
+                    </h5>
+                </div>
+
+                <div class="card-body p-4">
+
+                    <div class="text-center mb-4">
+                        <i class="fas fa-user-circle text-primary"
+                           style="font-size: 75px;"></i>
+
+                        <h5 class="mt-2 mb-1">
+                            {{ request.user.username }}
+                        </h5>
+
+                        <span class="badge badge-info">
+                            {{ request.user.user_type|title }}
+                        </span>
+                    </div>
+
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        {% for field in form %}
+                            <div class="form-group">
+                                <label>{{ field.label }}</label>
+                                {{ field }}
+
+                                {% for error in field.errors %}
+                                    <small class="text-danger">
+                                        {{ error }}
+                                    </small>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+
+                        <button type="submit"
+                                class="btn btn-primary btn-block mt-4">
+                            <i class="fas fa-save mr-1"></i>
+                            Save Changes
+                        </button>
+                    </form>
+
+                    <hr>
+
+                    <a href="{% url 'change_password' %}"
+                       class="btn btn-outline-secondary btn-block">
+                        <i class="fas fa-lock mr-1"></i>
+                        Change Password
+                    </a>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
